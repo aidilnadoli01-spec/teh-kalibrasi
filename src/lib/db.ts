@@ -2,11 +2,11 @@ import mysql from 'mysql2/promise';
 
 export async function getConnection() {
   try {
-    // Aiven membutuhkan koneksi SSL
-    // Menggunakan CA bawaan NodeJS sudah cukup untuk Aiven
-    const sslConfig = {
-      rejectUnauthorized: true
-    };
+    // Aiven membutuhkan SSL dengan CA certificate khusus
+    // DB_SSL_CA diisi di Vercel env vars dengan isi file ca.pem
+    const sslConfig: any = process.env.DB_SSL_CA
+      ? { ca: process.env.DB_SSL_CA, rejectUnauthorized: true }
+      : { rejectUnauthorized: false };
 
     const connection = await mysql.createConnection({
       host: process.env.DB_HOST,
