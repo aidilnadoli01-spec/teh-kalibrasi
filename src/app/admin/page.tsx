@@ -97,6 +97,10 @@ export default function AdminPage() {
   const [selectedUser, setSelectedUser] = useState<any>(null);
   const [userForm, setUserForm] = useState({ name: '', email: '', password: '', role: 'customer' });
 
+  // Login state
+  const [loginLoading, setLoginLoading] = useState(false);
+  const [loginError, setLoginError] = useState('');
+
   useEffect(() => {
     if (status === 'authenticated' && (session?.user as any)?.role === 'admin') {
       fetchOrders();
@@ -108,21 +112,31 @@ export default function AdminPage() {
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
-    // ✅ Gunakan 'admin-credentials' provider — bukan 'credentials' user
-    const result = await signIn('admin-credentials', {
-      redirect: false,
-      email,
-      password,
-    });
+    setLoginLoading(true);
+    setLoginError('');
+    try {
+      const result = await signIn('admin-credentials', {
+        redirect: false,
+        email,
+        password,
+      });
 
-    if (result?.error) {
-      // Tampilkan pesan error yang lebih ramah
-      const msg = result.error.includes('admin privileges')
-        ? 'Akun ini bukan admin. Gunakan akun admin yang valid.'
-        : result.error;
-      showToast(msg, 'error');
-    } else {
-      showToast('Logged in successfully', 'success');
+      if (result?.error) {
+        const msg = result.error.includes('admin privileges')
+          ? 'Akun ini bukan admin. Gunakan akun admin yang valid.'
+          : result.error.includes('Invalid email or password')
+          ? 'Email atau password salah. Coba lagi.'
+          : 'Login gagal. Periksa email dan password Anda.';
+        setLoginError(msg);
+        showToast(msg, 'error');
+      } else {
+        showToast('Login berhasil! Memuat dashboard...', 'success');
+      }
+    } catch (err) {
+      setLoginError('Terjadi kesalahan. Coba lagi.');
+      showToast('Terjadi kesalahan saat login.', 'error');
+    } finally {
+      setLoginLoading(false);
     }
   };
 
@@ -549,17 +563,24 @@ export default function AdminPage() {
         <motion.div
           initial={{ opacity: 0, scale: 0.9 }}
           animate={{ opacity: 1, scale: 1 }}
-          className="bg-white/10 rounded-lg p-8 max-w-md w-full"
+          className="bg-white/10 backdrop-blur-md border border-white/10 rounded-2xl p-8 max-w-md w-full shadow-2xl"
         >
-          <h1 className="text-4xl font-bold mb-8 text-center">Admin Login</h1>
+          <div className="text-center mb-8">
+            <div className="text-4xl mb-3">🍵</div>
+            <h1 className="text-3xl font-bold">Admin Login</h1>
+            <p className="text-white/50 text-sm mt-1">Masuk ke dashboard Tehkalibrasi</p>
+          </div>
+
           <form onSubmit={handleLogin} className="space-y-4">
             <div>
               <label className="block text-white text-sm font-bold mb-2">Email Address</label>
               <input
                 type="email"
                 value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                className="w-full px-4 py-2 bg-white/10 text-white rounded border border-white/20 focus:border-emerald-500 outline-none"
+                onChange={(e) => { setEmail(e.target.value); setLoginError(''); }}
+                className="w-full px-4 py-3 bg-white/10 text-white rounded-xl border border-white/20 focus:border-emerald-500 outline-none transition-all disabled:opacity-50"
+                placeholder="admin@email.com"
+                disabled={loginLoading}
                 required
               />
             </div>
@@ -568,22 +589,42 @@ export default function AdminPage() {
               <input
                 type="password"
                 value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                className="w-full px-4 py-2 bg-white/10 text-white rounded border border-white/20 focus:border-emerald-500 outline-none"
+                onChange={(e) => { setPassword(e.target.value); setLoginError(''); }}
+                className="w-full px-4 py-3 bg-white/10 text-white rounded-xl border border-white/20 focus:border-emerald-500 outline-none transition-all disabled:opacity-50"
+                placeholder="••••••••"
+                disabled={loginLoading}
                 required
               />
             </div>
-            {(!session && status === 'unauthenticated') && (
-              <p className="text-white/50 text-xs italic text-center">Please use an account with Admin role.</p>
+
+            {/* Error message */}
+            {loginError && (
+              <motion.div
+                initial={{ opacity: 0, y: -8 }}
+                animate={{ opacity: 1, y: 0 }}
+                className="flex items-center gap-2 bg-red-500/10 border border-red-500/30 rounded-xl px-4 py-3"
+              >
+                <span className="text-red-400 text-xl">⚠️</span>
+                <p className="text-red-400 text-sm font-medium">{loginError}</p>
+              </motion.div>
             )}
-            {(session && (session.user as any)?.role !== 'admin') && (
-              <p className="text-red-400 text-sm text-center font-bold">Access Denied: You are not an admin.</p>
-            )}
+
             <button
               type="submit"
-              className="w-full py-3 bg-emerald-500 text-black font-bold rounded-lg hover:bg-emerald-600 transition-all"
+              disabled={loginLoading}
+              className="w-full py-3 bg-emerald-500 text-black font-bold rounded-xl hover:bg-emerald-400 transition-all disabled:opacity-60 disabled:cursor-not-allowed flex items-center justify-center gap-2 mt-2"
             >
-              Login
+              {loginLoading ? (
+                <>
+                  <svg className="animate-spin h-5 w-5" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/>
+                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z"/>
+                  </svg>
+                  <span>Memverifikasi...</span>
+                </>
+              ) : (
+                'Login'
+              )}
             </button>
           </form>
         </motion.div>
