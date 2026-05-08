@@ -131,6 +131,10 @@ export default function AdminPage() {
         showToast(msg, 'error');
       } else {
         showToast('Login berhasil! Memuat dashboard...', 'success');
+        // ✅ Paksa reload halaman untuk memperbarui session state secara instan
+        setTimeout(() => {
+          window.location.reload();
+        }, 1000);
       }
     } catch (err) {
       setLoginError('Terjadi kesalahan. Coba lagi.');
