@@ -81,11 +81,15 @@ export default function ProfilePage() {
                        <span className={`px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider
                         ${order.status === 'pending' ? 'bg-yellow-500/20 text-yellow-500 border border-yellow-500/30' : ''}
                         ${order.status === 'processing' ? 'bg-blue-500/20 text-blue-500 border border-blue-500/30' : ''}
-                        ${order.status === 'shipped' ? 'bg-purple-500/20 text-purple-500 border border-purple-500/30' : ''}
-                        ${order.status === 'delivered' ? 'bg-green-500/20 text-green-500 border border-green-500/30' : ''}
+                        ${order.status === 'ready' ? 'bg-purple-500/20 text-purple-500 border border-purple-500/30' : ''}
+                        ${order.status === 'completed' ? 'bg-green-500/20 text-green-500 border border-green-500/30' : ''}
                         ${order.status === 'cancelled' ? 'bg-red-500/20 text-red-500 border border-red-500/30' : ''}
                       `}>
-                        Order: {order.status}
+                        {order.status === 'pending' ? 'MENUNGGU KONFIRMASI' : 
+                         order.status === 'processing' ? 'SEDANG DISIAPKAN' :
+                         order.status === 'ready' ? 'SIAP DIAMBIL' :
+                         order.status === 'completed' ? 'PESANAN SELESAI' : 
+                         order.status.toUpperCase()}
                       </span>
                       <span className={`px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider
                         ${order.payment_status === 'unpaid' ? 'bg-red-500/20 text-red-500 border border-red-500/30' : ''}
@@ -99,7 +103,7 @@ export default function ProfilePage() {
                   
                   <div className="text-sm text-white/70">
                      <p><span className="font-bold text-white/50">Method:</span> {order.payment_method}</p>
-                     <p><span className="font-bold text-white/50">Address:</span> {order.customer_address}</p>
+                     <p><span className="font-bold text-white/50">Lokasi Pengambilan:</span> {order.customer_address || 'Menunggu konfirmasi admin'}</p>
                   </div>
                 </div>
               ))}
