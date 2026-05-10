@@ -131,48 +131,45 @@ export function paymentVerifiedTemplate(order: {
       <p>Hei ${order.customer_name}, pembayaran untuk pesanan <strong>#${order.id}</strong> senilai <strong>Rp ${Number(order.total_price).toLocaleString('id-ID')}</strong> telah berhasil diverifikasi.</p>
     </div>
     <div class="card">
-      <p>Pesananmu sekarang akan segera kami siapkan dan dikirimkan. Kamu akan menerima notifikasi lagi saat paket dalam perjalanan.</p>
+      <p>Pesananmu sekarang akan segera kami siapkan. Kami akan memberi tahu kamu jika pesanan sudah siap untuk diambil (pickup).</p>
       <a href="${process.env.NEXT_PUBLIC_BASE_URL || 'http://localhost:3000'}/track-order" class="btn">Lihat Status Pesanan</a>
     </div>
   `);
 }
 
-// ---- Order Shipped ----
-export function orderShippedTemplate(order: {
+// ---- Order Ready for Pickup ----
+export function orderReadyTemplate(order: {
   id: number;
   customer_name: string;
-  customer_address: string;
 }) {
   return baseTemplate(`
     <div class="card">
-      <span class="badge badge-purple">📦 Pesanan Dikirim</span>
-      <h2 style="margin-top:16px;">Paketmu dalam perjalanan!</h2>
-      <p>Hei ${order.customer_name}, pesanan <strong>#${order.id}</strong> sudah dalam perjalanan menuju alamatmu.</p>
+      <span class="badge badge-purple">🛍️ Siap Diambil</span>
+      <h2 style="margin-top:16px;">Pesananmu sudah siap!</h2>
+      <p>Hei ${order.customer_name}, pesanan <strong>#${order.id}</strong> sudah siap untuk kamu ambil di outlet kami.</p>
     </div>
     <div class="card">
-      <p class="label">Alamat Pengiriman</p>
-      <p class="value">${order.customer_address}</p>
+      <p>Silakan tunjukkan Order ID atau Email konfirmasi ini saat pengambilan.</p>
       <hr class="divider"/>
-      <p>Harap siapkan diri untuk menerima paket. Jika ada masalah pengiriman, segera hubungi kami.</p>
-      <a href="${process.env.NEXT_PUBLIC_BASE_URL || 'http://localhost:3000'}/track-order" class="btn">Track Pesanan</a>
+      <a href="${process.env.NEXT_PUBLIC_BASE_URL || 'http://localhost:3000'}/track-order" class="btn">Lihat Detail Pesanan</a>
     </div>
   `);
 }
 
-// ---- Order Delivered ----
-export function orderDeliveredTemplate(order: {
+// ---- Order Completed (Picked Up) ----
+export function orderCompletedTemplate(order: {
   id: number;
   customer_name: string;
 }) {
   return baseTemplate(`
     <div class="card">
-      <span class="badge badge-green">✅ Pesanan Diterima</span>
-      <h2 style="margin-top:16px;">Pesananmu sudah sampai!</h2>
-      <p>Hei ${order.customer_name}, pesanan <strong>#${order.id}</strong> telah berhasil dikirimkan. Semoga kamu menikmati tehmu! 🍵</p>
+      <span class="badge badge-green">✅ Pesanan Selesai</span>
+      <h2 style="margin-top:16px;">Terima kasih sudah berkunjung!</h2>
+      <p>Hei ${order.customer_name}, pesanan <strong>#${order.id}</strong> telah berhasil diambil. Semoga kamu menikmati tehmu! 🍵</p>
     </div>
     <div class="card" style="text-align:center;">
-      <p>Bagikan pengalamanmu dan bantu orang lain menemukan teh terbaik mereka dengan meninggalkan ulasan.</p>
-      <a href="${process.env.NEXT_PUBLIC_BASE_URL || 'http://localhost:3000'}/products" class="btn">Tulis Ulasan</a>
+      <p>Bagikan pengalamanmu dan bantu orang lain menemukan teh terbaik mereka.</p>
+      <a href="${process.env.NEXT_PUBLIC_BASE_URL || 'http://localhost:3000'}/products" class="btn">Lihat Menu Lainnya</a>
     </div>
   `);
 }

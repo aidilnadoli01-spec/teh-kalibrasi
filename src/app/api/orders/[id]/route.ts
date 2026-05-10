@@ -3,8 +3,8 @@ import { query, getConnection } from '@/lib/db';
 import {
   sendEmail,
   paymentVerifiedTemplate,
-  orderShippedTemplate,
-  orderDeliveredTemplate,
+  orderReadyTemplate,
+  orderCompletedTemplate,
 } from '@/lib/email';
 
 export async function GET(
@@ -62,7 +62,7 @@ export async function PUT(
 
     // Update status if provided
     if (status) {
-      const validStatuses = ['pending', 'processing', 'shipped', 'delivered', 'cancelled'];
+      const validStatuses = ['pending', 'processing', 'ready', 'completed', 'cancelled'];
       if (!validStatuses.includes(status)) {
         return NextResponse.json(
           { error: 'Invalid status' },
@@ -139,23 +139,22 @@ export async function PUT(
           }).catch(console.error);
         }
 
-        if (status === 'shipped') {
+        if (status === 'ready') {
           sendEmail({
             to: order.customer_email,
-            subject: `Pesananmu Dikirim! - Order #${orderId} | Tehkalibrasi`,
-            html: orderShippedTemplate({
+            subject: `Pesanan Siap Diambil! - Order #${orderId} | Tehkalibrasi`,
+            html: orderReadyTemplate({
               id: order.id,
               customer_name: order.customer_name,
-              customer_address: order.customer_address,
             }),
           }).catch(console.error);
         }
 
-        if (status === 'delivered') {
+        if (status === 'completed') {
           sendEmail({
             to: order.customer_email,
-            subject: `Pesananmu Sudah Sampai! - Order #${orderId} | Tehkalibrasi`,
-            html: orderDeliveredTemplate({
+            subject: `Pesanan Selesai - Order #${orderId} | Tehkalibrasi`,
+            html: orderCompletedTemplate({
               id: order.id,
               customer_name: order.customer_name,
             }),

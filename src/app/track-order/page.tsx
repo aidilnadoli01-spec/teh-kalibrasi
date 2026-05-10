@@ -127,9 +127,9 @@ export default function TrackOrderPage() {
         return 'bg-yellow-500/20 text-yellow-500';
       case 'processing':
         return 'bg-blue-500/20 text-blue-500';
-      case 'shipped':
+      case 'ready':
         return 'bg-purple-500/20 text-purple-500';
-      case 'delivered':
+      case 'completed':
         return 'bg-green-500/20 text-green-500';
       case 'cancelled':
         return 'bg-red-500/20 text-red-500';
@@ -272,7 +272,11 @@ export default function TrackOrderPage() {
                   <div>
                     <p className="text-white/60 text-sm mb-2">Order Status</p>
                     <span className={`px-3 py-1 rounded-full text-xs font-bold inline-block ${getStatusColor(order.status)}`}>
-                      {order.status.toUpperCase()}
+                      {order.status === 'pending' ? 'MENUNGGU KONFIRMASI' : 
+                       order.status === 'processing' ? 'SEDANG DISIAPKAN' :
+                       order.status === 'ready' ? 'SIAP DIAMBIL (PICKUP)' :
+                       order.status === 'completed' ? 'PESANAN SELESAI' : 
+                       order.status.toUpperCase()}
                     </span>
                   </div>
                   <div>

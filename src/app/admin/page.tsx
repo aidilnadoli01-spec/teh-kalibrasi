@@ -13,7 +13,7 @@ interface Order {
   customer_phone: string;
   customer_address: string;
   total_price: number;
-  status: 'pending' | 'processing' | 'shipped' | 'delivered' | 'cancelled';
+  status: 'pending' | 'processing' | 'ready' | 'completed' | 'cancelled';
   notes: string;
   payment_method: 'bank_transfer' | 'ewallet' | 'cod';
   payment_status: 'unpaid' | 'pending' | 'verified';
@@ -817,14 +817,18 @@ export default function AdminPage() {
                                       ? 'bg-yellow-500/20 text-yellow-500'
                                       : order.status === 'processing'
                                       ? 'bg-blue-500/20 text-blue-500'
-                                      : order.status === 'shipped'
+                                      : order.status === 'ready'
                                       ? 'bg-purple-500/20 text-purple-500'
-                                      : order.status === 'delivered'
+                                      : order.status === 'completed'
                                       ? 'bg-green-500/20 text-green-500'
                                       : 'bg-red-500/20 text-red-500'
                                   }`}
                                 >
-                                  {order.status}
+                                  {order.status === 'pending' ? 'Menunggu' : 
+                                   order.status === 'processing' ? 'Disiapkan' :
+                                   order.status === 'ready' ? 'Siap Diambil' :
+                                   order.status === 'completed' ? 'Selesai' : 
+                                   'Dibatalkan'}
                                 </span>
                               </td>
                               <td className="py-3 px-4 text-white/50 text-xs">
@@ -893,11 +897,11 @@ export default function AdminPage() {
                           onChange={(e) => setNewStatus(e.target.value)}
                           className="w-full px-4 py-2 bg-white/10 text-white rounded border border-white/20 focus:border-emerald-500 outline-none [&>option]:bg-neutral-900 [&>option]:text-white"
                         >
-                          <option value="pending" className="bg-neutral-900 text-white">Pending</option>
-                          <option value="processing" className="bg-neutral-900 text-white">Processing</option>
-                          <option value="shipped" className="bg-neutral-900 text-white">Shipped</option>
-                          <option value="delivered" className="bg-neutral-900 text-white">Delivered</option>
-                          <option value="cancelled" className="bg-neutral-900 text-white">Cancelled</option>
+                          <option value="pending">Menunggu Konfirmasi</option>
+                          <option value="processing">Sedang Disiapkan</option>
+                          <option value="ready">Siap Diambil (Pickup)</option>
+                          <option value="completed">Selesai (Sudah Diambil)</option>
+                          <option value="cancelled">Batalkan Pesanan</option>
                         </select>
                       </div>
                       <div>
