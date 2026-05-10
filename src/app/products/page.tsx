@@ -178,21 +178,49 @@ export default function ProductsPage() {
   const toggleWishlist = async (productId: number) => {
     if (!requireLogin("You need to login to save to your wishlist.")) return;
 
+    const isRemoving = wishlist.includes(productId);
+    const product = products.find(p => p.id === productId);
+    const productName = product ? product.name : "Produk";
+    
+    // 1. Optimistic Update (UI updates immediately)
+    setWishlist(prev => 
+      isRemoving 
+        ? prev.filter(id => id !== productId)
+        : [...prev, productId]
+    );
+
+    // 2. Show Notification immediately
+    if (isRemoving) {
+      showToast(`${productName} dihapus dari wishlist`, "error");
+    } else {
+      showToast(`❤️ ${productName} ditambahkan ke wishlist!`, "success");
+    }
+
     try {
+      // 3. Background Sync with API
       const res = await fetch('/api/wishlist', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ productId })
       });
-      if (res.ok) {
+      
+      if (!res.ok) {
+        // Rollback on failure
         setWishlist(prev => 
-          prev.includes(productId) 
-            ? prev.filter(id => id !== productId)
-            : [...prev, productId]
+          isRemoving 
+            ? [...prev, productId]
+            : prev.filter(id => id !== productId)
         );
+        showToast("Koneksi gagal, wishlist tidak tersimpan.", "error");
       }
     } catch (err) {
       console.error('Failed to update wishlist', err);
+      // Rollback on error
+      setWishlist(prev => 
+        isRemoving 
+          ? [...prev, productId]
+          : prev.filter(id => id !== productId)
+      );
     }
   };
 
