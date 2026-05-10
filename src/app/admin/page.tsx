@@ -925,7 +925,7 @@ export default function AdminPage() {
                                 ? 'Bank Transfer'
                                 : selectedOrder.payment_method === 'ewallet'
                                 ? 'E-Wallet'
-                                : 'Cash on Delivery'}
+                                : 'Bayar di Tempat (Pickup)'}
                             </p>
                           </div>
                           <div>

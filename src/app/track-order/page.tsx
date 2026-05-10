@@ -158,7 +158,7 @@ export default function TrackOrderPage() {
       case 'ewallet':
         return 'E-Wallet';
       case 'cod':
-        return 'Cash on Delivery';
+        return 'Bayar di Tempat (Pickup)';
       default:
         return method;
     }

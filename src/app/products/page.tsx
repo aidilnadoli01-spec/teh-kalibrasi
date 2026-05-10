@@ -715,14 +715,16 @@ function CheckoutModal({
           </div>
 
           <div>
-            <label className="block text-white text-sm font-bold mb-2">Address</label>
+            <label className="block text-white text-sm font-bold mb-2">Alamat Pengambilan (Pickup)</label>
+            <p className="text-white/40 text-xs mb-2 italic">Sistem ini hanya mendukung pengambilan di tempat. Harap masukkan keterangan lokasi pengambilan atau biarkan default.</p>
             <textarea
               name="customerAddress"
               value={formData.customerAddress}
               onChange={handleChange}
               required
-              rows={3}
+              rows={2}
               className="w-full px-4 py-2 bg-gray-800 text-white rounded border border-gray-700 focus:border-emerald-500 focus:bg-gray-800/80 outline-none"
+              placeholder="Contoh: Ambil di Outlet Pusat"
             />
           </div>
 
@@ -735,8 +737,8 @@ function CheckoutModal({
               className="w-full px-4 py-2 bg-gray-800 text-white rounded border border-gray-700 focus:border-emerald-500 outline-none"
             >
               <option value="bank_transfer">Bank Transfer</option>
-              <option value="ewallet">E-Wallet (GCash, Dana, OVO)</option>
-              <option value="cod">Cash on Delivery (COD)</option>
+              <option value="ewallet">E-Wallet (OVO, Dana, etc.)</option>
+              <option value="cod">Bayar di Tempat (Cash on Pickup)</option>
             </select>
           </div>
 
