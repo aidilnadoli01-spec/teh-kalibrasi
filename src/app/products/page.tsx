@@ -77,17 +77,17 @@ export default function ProductsPage() {
       return;
     }
 
-    let success = false;
-    setCart((prevCart) => {
-      const existingItem = prevCart.find((item) => item.productId === product.id);
-      
-      if (existingItem && existingItem.quantity >= product.stock) {
-        showToast(`Stok terbatas! Hanya tersedia ${product.stock} pcs.`, "error");
-        return prevCart;
-      }
+    // Check stock against current cart
+    const existingInCart = cart.find(item => item.productId === product.id);
+    if (existingInCart && existingInCart.quantity >= product.stock) {
+      showToast(`Stok terbatas! Hanya tersedia ${product.stock} pcs.`, "error");
+      setAddingToCartId(null);
+      return;
+    }
 
-      success = true;
-      if (existingItem) {
+    setCart((prevCart) => {
+      const itemInCart = prevCart.find((item) => item.productId === product.id);
+      if (itemInCart) {
         return prevCart.map((item) =>
           item.productId === product.id ? { ...item, quantity: item.quantity + 1 } : item
         );
@@ -103,10 +103,7 @@ export default function ProductsPage() {
       ];
     });
     
-    if (success) {
-      showToast(`${product.name} ditambahkan ke keranjang!`, "success");
-    }
-    
+    showToast(`${product.name} ditambahkan ke keranjang!`, "success");
     setAddingToCartId(null);
   };
 
@@ -576,7 +573,7 @@ export default function ProductsPage() {
             initial={{ opacity: 0, y: 50, x: '-50%' }}
             animate={{ opacity: 1, y: 0, x: '-50%' }}
             exit={{ opacity: 0, y: 20, x: '-50%' }}
-            className={`fixed bottom-10 left-1/2 z-[100] px-6 py-3 rounded-xl shadow-2xl flex items-center gap-3 min-w-[300px] border ${
+            className={`fixed bottom-10 left-1/2 z-[9999] px-6 py-3 rounded-xl shadow-2xl flex items-center gap-3 min-w-[320px] border transform -translate-x-1/2 ${
               toast.type === 'success' 
                 ? 'bg-[#22C55E] border-white/20 text-white' 
                 : 'bg-red-600 border-white/20 text-white'
