@@ -58,6 +58,7 @@ export default function AdminPage() {
   const [bankName, setBankName] = useState('');
   const [bankAccountName, setBankAccountName] = useState('');
   const [bankAccountNumber, setBankAccountNumber] = useState('');
+  const [customerAddress, setCustomerAddress] = useState('');
 
   // Customers
   const [customers, setCustomers] = useState<any[]>([]);
@@ -176,6 +177,7 @@ export default function AdminPage() {
           bank_name: bankName,
           bank_account_name: bankAccountName,
           bank_account_number: bankAccountNumber,
+          customer_address: customerAddress,
         }),
       });
       if (response.ok) {
@@ -843,6 +845,7 @@ export default function AdminPage() {
                                     setBankName(order.bank_name || '');
                                     setBankAccountName(order.bank_account_name || '');
                                     setBankAccountNumber(order.bank_account_number || '');
+                                    setCustomerAddress(order.customer_address || '');
                                   }}
                                   className="text-emerald-500 hover:text-emerald-400 font-bold"
                                 >
@@ -911,6 +914,16 @@ export default function AdminPage() {
                           onChange={(e) => setNotes(e.target.value)}
                           rows={3}
                           className="w-full px-4 py-2 bg-white/10 text-white rounded border border-white/20 focus:border-emerald-500 outline-none"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-white/60 text-sm mb-2">Lokasi Pengambilan (Pickup Address)</label>
+                        <textarea
+                          value={customerAddress}
+                          onChange={(e) => setCustomerAddress(e.target.value)}
+                          rows={2}
+                          className="w-full px-4 py-2 bg-white/10 text-white rounded border border-white/20 focus:border-emerald-500 outline-none placeholder-white/20"
+                          placeholder="Masukkan alamat toko/lokasi pengambilan..."
                         />
                       </div>
 

@@ -305,8 +305,8 @@ export default function TrackOrderPage() {
                     <p className="text-white">{order.customer_phone || 'Not provided'}</p>
                   </div>
                   <div>
-                    <p className="text-white/60 text-sm">Address</p>
-                    <p className="text-white">{order.customer_address}</p>
+                    <p className="text-white/60 text-sm">Lokasi Pengambilan (Pickup Location)</p>
+                    <p className="text-white font-bold">{order.customer_address || 'Akan segera ditentukan oleh Admin'}</p>
                   </div>
                 </div>
               </div>

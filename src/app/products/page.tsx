@@ -714,19 +714,7 @@ function CheckoutModal({
             <p className="text-white/30 text-xs mt-0.5">{formData.customerPhone.length}/15 — hanya angka</p>
           </div>
 
-          <div>
-            <label className="block text-white text-sm font-bold mb-2">Alamat Pengambilan (Pickup)</label>
-            <p className="text-white/40 text-xs mb-2 italic">Sistem ini hanya mendukung pengambilan di tempat. Harap masukkan keterangan lokasi pengambilan atau biarkan default.</p>
-            <textarea
-              name="customerAddress"
-              value={formData.customerAddress}
-              onChange={handleChange}
-              required
-              rows={2}
-              className="w-full px-4 py-2 bg-gray-800 text-white rounded border border-gray-700 focus:border-emerald-500 focus:bg-gray-800/80 outline-none"
-              placeholder="Contoh: Ambil di Outlet Pusat"
-            />
-          </div>
+
 
           <div>
             <label className="block text-white text-sm font-bold mb-2">Payment Method</label>

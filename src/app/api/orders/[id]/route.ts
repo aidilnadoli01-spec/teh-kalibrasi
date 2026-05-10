@@ -55,7 +55,7 @@ export async function PUT(
     const resolvedParams = await Promise.resolve(params);
     const orderId = resolvedParams.id;
     const body = await request.json();
-    const { status, notes, payment_status, bank_name, bank_account_name, bank_account_number } = body;
+    const { status, notes, payment_status, bank_name, bank_account_name, bank_account_number, customer_address } = body;
 
     const updateFields: string[] = [];
     const updateValues: any[] = [];
@@ -104,6 +104,10 @@ export async function PUT(
     if (bank_account_number !== undefined) {
       updateFields.push('bank_account_number = ?');
       updateValues.push(bank_account_number);
+    }
+    if (customer_address !== undefined) {
+      updateFields.push('customer_address = ?');
+      updateValues.push(customer_address);
     }
 
     if (updateFields.length === 0) {
