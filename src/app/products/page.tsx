@@ -46,6 +46,8 @@ export default function ProductsPage() {
   const [createdOrderId, setCreatedOrderId] = useState<number | null>(null);
   const [showLoginPrompt, setShowLoginPrompt] = useState(false);
   const [loginPromptMessage, setLoginPromptMessage] = useState('');
+  const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' } | null>(null);
+  const [addingToCartId, setAddingToCartId] = useState<number | null>(null);
 
   const requireLogin = (message: string) => {
     if (!session) {
@@ -54,6 +56,58 @@ export default function ProductsPage() {
       return false;
     }
     return true;
+  };
+
+  const showToast = (message: string, type: 'success' | 'error') => {
+    setToast({ message, type });
+    setTimeout(() => setToast(null), 3000);
+  };
+
+  const addToCart = async (product: Product) => {
+    if (!requireLogin("You need to login to add items to your cart.")) return;
+    
+    setAddingToCartId(product.id);
+    
+    // Simulate loading for better UX
+    await new Promise(resolve => setTimeout(resolve, 600));
+    
+    if (product.stock <= 0) {
+      showToast("Gagal! Stok produk ini sudah habis.", "error");
+      setAddingToCartId(null);
+      return;
+    }
+
+    let success = false;
+    setCart((prevCart) => {
+      const existingItem = prevCart.find((item) => item.productId === product.id);
+      
+      if (existingItem && existingItem.quantity >= product.stock) {
+        showToast(`Stok terbatas! Hanya tersedia ${product.stock} pcs.`, "error");
+        return prevCart;
+      }
+
+      success = true;
+      if (existingItem) {
+        return prevCart.map((item) =>
+          item.productId === product.id ? { ...item, quantity: item.quantity + 1 } : item
+        );
+      }
+      return [
+        ...prevCart,
+        {
+          productId: product.id,
+          quantity: 1,
+          price: product.price,
+          name: product.name,
+        },
+      ];
+    });
+    
+    if (success) {
+      showToast(`${product.name} ditambahkan ke keranjang!`, "success");
+    }
+    
+    setAddingToCartId(null);
   };
 
   useEffect(() => {
@@ -106,26 +160,7 @@ export default function ProductsPage() {
     }
   };
 
-  const addToCart = (product: Product) => {
-    if (!requireLogin("You need to login to add items to your cart.")) return;
-    setCart((prevCart) => {
-      const existingItem = prevCart.find((item) => item.productId === product.id);
-      if (existingItem) {
-        return prevCart.map((item) =>
-          item.productId === product.id ? { ...item, quantity: item.quantity + 1 } : item
-        );
-      }
-      return [
-        ...prevCart,
-        {
-          productId: product.id,
-          quantity: 1,
-          price: product.price,
-          name: product.name,
-        },
-      ];
-    });
-  };
+
 
   const removeFromCart = (productId: number) => {
     setCart((prevCart) => prevCart.filter((item) => item.productId !== productId));
@@ -306,10 +341,23 @@ export default function ProductsPage() {
                           
                           <button
                             onClick={() => addToCart(product)}
-                            disabled={product.stock === 0}
-                            className="w-full py-3 bg-emerald-500 text-black font-bold rounded-lg hover:bg-emerald-400 transition-all disabled:opacity-50 disabled:cursor-not-allowed group-hover:shadow-[0_0_15px_rgba(16,185,129,0.3)]"
+                            disabled={product.stock === 0 || addingToCartId === product.id}
+                            className={`w-full py-3 text-black font-bold rounded-lg transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 ${
+                              product.stock === 0 
+                                ? 'bg-red-500/20 text-red-500 border border-red-500/30' 
+                                : 'bg-emerald-500 hover:bg-emerald-400 group-hover:shadow-[0_0_15px_rgba(16,185,129,0.3)]'
+                            }`}
                           >
-                            {product.stock === 0 ? 'Out of Stock' : 'Add to Cart'}
+                            {addingToCartId === product.id ? (
+                              <>
+                                <span className="w-5 h-5 border-2 border-black/30 border-t-black rounded-full animate-spin" />
+                                Memasukkan...
+                              </>
+                            ) : product.stock === 0 ? (
+                              'Out of Stock'
+                            ) : (
+                              'Add to Cart'
+                            )}
                           </button>
                           
                           <a
@@ -797,6 +845,26 @@ function CheckoutModal({
           </button>
         </form>
       </motion.div>
+      {/* Toast Notification */}
+      <AnimatePresence>
+        {toast && (
+          <motion.div
+            initial={{ opacity: 0, y: 50, x: '-50%' }}
+            animate={{ opacity: 1, y: 0, x: '-50%' }}
+            exit={{ opacity: 0, y: 20, x: '-50%' }}
+            className={`fixed bottom-10 left-1/2 z-[100] px-6 py-3 rounded-xl shadow-2xl flex items-center gap-3 min-w-[300px] border ${
+              toast.type === 'success' 
+                ? 'bg-[#22C55E] border-white/20 text-white' 
+                : 'bg-red-600 border-white/20 text-white'
+            }`}
+          >
+            <span className="text-xl">
+              {toast.type === 'success' ? '✅' : '⚠️'}
+            </span>
+            <span className="font-bold">{toast.message}</span>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   );
 }
