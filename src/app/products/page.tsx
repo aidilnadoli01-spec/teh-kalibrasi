@@ -569,6 +569,26 @@ export default function ProductsPage() {
       )}
 
       <Footer />
+      {/* Toast Notification */}
+      <AnimatePresence>
+        {toast && (
+          <motion.div
+            initial={{ opacity: 0, y: 50, x: '-50%' }}
+            animate={{ opacity: 1, y: 0, x: '-50%' }}
+            exit={{ opacity: 0, y: 20, x: '-50%' }}
+            className={`fixed bottom-10 left-1/2 z-[100] px-6 py-3 rounded-xl shadow-2xl flex items-center gap-3 min-w-[300px] border ${
+              toast.type === 'success' 
+                ? 'bg-[#22C55E] border-white/20 text-white' 
+                : 'bg-red-600 border-white/20 text-white'
+            }`}
+          >
+            <span className="text-xl">
+              {toast.type === 'success' ? '✅' : '⚠️'}
+            </span>
+            <span className="font-bold">{toast.message}</span>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   );
 }
@@ -845,26 +865,7 @@ function CheckoutModal({
           </button>
         </form>
       </motion.div>
-      {/* Toast Notification */}
-      <AnimatePresence>
-        {toast && (
-          <motion.div
-            initial={{ opacity: 0, y: 50, x: '-50%' }}
-            animate={{ opacity: 1, y: 0, x: '-50%' }}
-            exit={{ opacity: 0, y: 20, x: '-50%' }}
-            className={`fixed bottom-10 left-1/2 z-[100] px-6 py-3 rounded-xl shadow-2xl flex items-center gap-3 min-w-[300px] border ${
-              toast.type === 'success' 
-                ? 'bg-[#22C55E] border-white/20 text-white' 
-                : 'bg-red-600 border-white/20 text-white'
-            }`}
-          >
-            <span className="text-xl">
-              {toast.type === 'success' ? '✅' : '⚠️'}
-            </span>
-            <span className="font-bold">{toast.message}</span>
-          </motion.div>
-        )}
-      </AnimatePresence>
+
     </div>
   );
 }
