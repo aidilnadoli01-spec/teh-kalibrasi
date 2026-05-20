@@ -2,20 +2,22 @@ import mysql from 'mysql2/promise';
 
 export async function getConnection() {
   try {
-    // Aiven membutuhkan SSL dengan CA certificate khusus
-    // DB_SSL_CA diisi di Vercel env vars dengan isi file ca.pem
-    const sslConfig: any = process.env.DB_SSL_CA
-      ? { ca: process.env.DB_SSL_CA, rejectUnauthorized: true }
-      : { rejectUnauthorized: false };
-
-    const connection = await mysql.createConnection({
+    const connectionConfig: any = {
       host: process.env.DB_HOST,
       user: process.env.DB_USER,
       password: process.env.DB_PASSWORD,
       database: process.env.DB_DATABASE,
       port: parseInt(process.env.DB_PORT || '3306'),
-      ssl: sslConfig,
-    });
+    };
+
+    // Aiven/remote DB requires SSL, local XAMPP doesn't support it
+    if (process.env.DB_SSL_CA) {
+      connectionConfig.ssl = { ca: process.env.DB_SSL_CA, rejectUnauthorized: true };
+    } else if (process.env.DB_HOST !== 'localhost' && process.env.DB_HOST !== '127.0.0.1') {
+      connectionConfig.ssl = { rejectUnauthorized: false };
+    }
+
+    const connection = await mysql.createConnection(connectionConfig);
     return connection;
   } catch (error) {
     console.error('Database connection error:', error);
