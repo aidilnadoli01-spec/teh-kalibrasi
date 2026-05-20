@@ -88,7 +88,7 @@ export default function TrackOrderPage() {
     setLoading(true);
     setError('');
     try {
-      const response = await fetch('/api/orders');
+      const response = await fetch('/api/orders/user');
       if (!response.ok) {
         throw new Error('Failed to fetch orders');
       }
