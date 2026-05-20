@@ -18,6 +18,9 @@ interface Order {
   payment_method: 'bank_transfer' | 'ewallet' | 'cod';
   payment_status: 'unpaid' | 'pending' | 'verified';
   payment_proof_url: string | null;
+  payment_uploaded_at?: string | null;
+  payment_verified_at?: string | null;
+  payment_verified_by?: number | null;
   bank_name: string | null;
   bank_account_name: string | null;
   bank_account_number: string | null;
@@ -72,6 +75,7 @@ export default function AdminPage() {
   const [bankAccountName, setBankAccountName] = useState('');
   const [bankAccountNumber, setBankAccountNumber] = useState('');
   const [customerAddress, setCustomerAddress] = useState('');
+  const [isProofZoomed, setIsProofZoomed] = useState(false);
 
   // Customers
   const [customers, setCustomers] = useState<any[]>([]);
@@ -1388,14 +1392,33 @@ export default function AdminPage() {
 
                           {/* Payment Proof */}
                           {selectedOrder.payment_proof_url && (
-                            <div>
-                              <p className="text-white/60 text-xs mb-2">Payment Proof</p>
-                              <img
-                                src={selectedOrder.payment_proof_url}
-                                alt="Payment proof"
-                                className="w-full h-auto rounded border border-emerald-500/30 max-h-48 object-contain cursor-pointer hover:scale-105 transition-all"
-                              onClick={() => window.open(selectedOrder.payment_proof_url ?? undefined, '_blank')}
-                              />
+                            <div className="bg-white/5 p-3 rounded border border-white/10 mt-2">
+                              <p className="text-white/60 text-xs mb-2 font-bold">Payment Proof</p>
+                              
+                              <div className="grid grid-cols-2 gap-2 mb-3">
+                                <div>
+                                  <p className="text-white/40 text-[10px]">Waktu Upload</p>
+                                  <p className="text-white text-xs">{selectedOrder.payment_uploaded_at ? new Date(selectedOrder.payment_uploaded_at).toLocaleString() : '-'}</p>
+                                </div>
+                                <div>
+                                  <p className="text-white/40 text-[10px]">Waktu Verifikasi</p>
+                                  <p className="text-white text-xs">{selectedOrder.payment_verified_at ? new Date(selectedOrder.payment_verified_at).toLocaleString() : '-'}</p>
+                                </div>
+                              </div>
+
+                              <div 
+                                className="relative group cursor-zoom-in overflow-hidden rounded border border-emerald-500/30 hover:border-emerald-500 transition-all max-w-[200px]"
+                                onClick={() => setIsProofZoomed(true)}
+                              >
+                                <img
+                                  src={selectedOrder.payment_proof_url}
+                                  alt="Payment proof"
+                                  className="w-full h-auto object-contain transition-transform group-hover:scale-105 max-h-48"
+                                />
+                                <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity">
+                                  <span className="text-white text-xs font-bold">🔍 Perbesar</span>
+                                </div>
+                              </div>
                             </div>
                           )}
 
@@ -2400,6 +2423,29 @@ export default function AdminPage() {
           )}
         </div>
       </main>
+
+      {/* Proof Zoom Modal */}
+      {isProofZoomed && selectedOrder && selectedOrder.payment_proof_url && (
+        <div 
+          className="fixed inset-0 z-[100] flex items-center justify-center bg-black/90 p-4 transition-all duration-300 backdrop-blur-sm cursor-zoom-out"
+          onClick={() => setIsProofZoomed(false)}
+        >
+          <motion.div
+            initial={{ opacity: 0, scale: 0.9 }}
+            animate={{ opacity: 1, scale: 1 }}
+            className="relative bg-white p-4 rounded-2xl max-w-2xl w-full border border-emerald-500/50 shadow-[0_0_50px_rgba(16,185,129,0.3)]"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex justify-between items-center mb-3">
+              <h4 className="text-black font-bold text-lg">Bukti Pembayaran - Order #{selectedOrder.id}</h4>
+              <button onClick={() => setIsProofZoomed(false)} className="w-8 h-8 rounded-full bg-gray-100 hover:bg-gray-200 text-gray-700 font-bold">✕</button>
+            </div>
+            <div className="bg-gray-50 rounded-lg p-2 border border-gray-200 flex justify-center">
+              <img src={selectedOrder.payment_proof_url} alt="Zoomed Proof" className="max-w-full h-auto max-h-[75vh] object-contain" />
+            </div>
+          </motion.div>
+        </div>
+      )}
     </div>
   );
 }

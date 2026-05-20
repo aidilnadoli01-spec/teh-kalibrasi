@@ -72,6 +72,8 @@ export default function TrackOrderPage() {
   const [uploadingProof, setUploadingProof] = useState(false);
   const [proofMessage, setProofMessage] = useState('');
   const [isQrZoomed, setIsQrZoomed] = useState(false);
+  const [previewImage, setPreviewImage] = useState<string | null>(null);
+  const [selectedFile, setSelectedFile] = useState<File | null>(null);
 
   const { data: session, status } = useSession();
   const router = useRouter();
@@ -111,15 +113,22 @@ export default function TrackOrderPage() {
     }
   }, [status, fetchOrders]);
 
-  const handleUploadProof = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (!selectedOrder || !e.target.files?.[0]) return;
-
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (!e.target.files?.[0]) return;
     const file = e.target.files[0];
+    setSelectedFile(file);
+    setPreviewImage(URL.createObjectURL(file));
+    setProofMessage('');
+  };
+
+  const submitPaymentProof = async () => {
+    if (!selectedOrder || !selectedFile) return;
+
     setUploadingProof(true);
     setProofMessage('');
 
     const formData = new FormData();
-    formData.append('file', file);
+    formData.append('file', selectedFile);
     formData.append('orderId', String(selectedOrder.id));
 
     try {
@@ -128,25 +137,19 @@ export default function TrackOrderPage() {
         body: formData,
       });
 
+      const data = await uploadResponse.json();
+
       if (!uploadResponse.ok) {
-        throw new Error('Failed to upload payment proof');
-      }
-
-      const uploadData = await uploadResponse.json();
-
-      const updateResponse = await fetch(`/api/orders/${selectedOrder.id}/payment-proof`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          paymentProofUrl: uploadData.imagePath,
-        }),
-      });
-
-      if (!updateResponse.ok) {
-        throw new Error('Failed to save payment proof');
+        throw new Error(data.error || 'Failed to upload payment proof');
       }
 
       setProofMessage('Payment proof uploaded successfully! Admin will verify it soon.');
+      setSelectedFile(null);
+      setPreviewImage(null);
+      
+      // Update local state directly so UI responds immediately
+      setSelectedOrder({ ...selectedOrder, payment_status: 'pending', payment_proof_url: data.imagePath });
+      
       await new Promise(r => setTimeout(r, 1000));
       fetchOrders();
     } catch (err) {
@@ -261,6 +264,8 @@ export default function TrackOrderPage() {
                         onClick={() => {
                           setSelectedOrder(o);
                           setProofMessage('');
+                          setPreviewImage(null);
+                          setSelectedFile(null);
                         }}
                         className={`p-4 rounded-lg cursor-pointer border transition-all ${
                           selectedOrder?.id === o.id 
@@ -514,19 +519,34 @@ export default function TrackOrderPage() {
                           <span className="text-white/80 text-sm font-semibold mb-2 block">
                             {selectedOrder.payment_proof_url ? 'Update Payment Proof:' : 'Upload Payment Proof:'}
                           </span>
-                          <input type="file" accept="image/*" onChange={handleUploadProof} disabled={uploadingProof} className="hidden" />
+                          <input type="file" accept="image/jpeg, image/png, image/webp, image/gif" onChange={handleFileChange} disabled={uploadingProof} className="hidden" />
                           <div className="border-2 border-dashed border-emerald-500/50 rounded-lg p-6 text-center cursor-pointer hover:border-emerald-500 hover:bg-emerald-500/5 transition-all">
-                            <p className="text-white/60 text-sm">{uploadingProof ? 'Uploading...' : 'Click to select image (JPEG, PNG, WebP - Max 5MB)'}</p>
+                            <p className="text-white/60 text-sm">{uploadingProof ? 'Uploading...' : 'Click to select image (JPEG, PNG, WebP, GIF - Max 5MB)'}</p>
                           </div>
                         </label>
                         
+                        {previewImage && (
+                           <div className="mb-4 bg-black/40 p-4 rounded-lg border border-white/10">
+                              <p className="text-white/60 text-xs mb-2">Image Preview:</p>
+                              <img src={previewImage} alt="Preview" className="w-full max-w-sm rounded border border-white/20 mb-3" />
+                              <button 
+                                onClick={submitPaymentProof}
+                                disabled={uploadingProof}
+                                className="px-4 py-2 bg-emerald-500 text-black font-bold rounded text-sm hover:bg-emerald-600 transition-all disabled:opacity-50 flex items-center gap-2"
+                              >
+                                {uploadingProof ? <span className="w-4 h-4 border-2 border-black border-t-transparent rounded-full animate-spin"></span> : '📤'}
+                                {uploadingProof ? 'Uploading...' : 'Upload Now'}
+                              </button>
+                           </div>
+                        )}
+
                         {proofMessage && (
                           <div className={`p-3 rounded text-sm mb-4 ${proofMessage.includes('successfully') ? 'bg-green-500/20 text-green-500' : 'bg-red-500/20 text-red-500'}`}>
                             {proofMessage}
                           </div>
                         )}
 
-                        {selectedOrder.payment_proof_url && (
+                        {selectedOrder.payment_proof_url && !previewImage && (
                           <div>
                             <p className="text-white/60 text-sm mb-2">Uploaded Proof:</p>
                             <img src={selectedOrder.payment_proof_url} alt="Proof" className="w-full max-w-sm rounded border border-white/10" />

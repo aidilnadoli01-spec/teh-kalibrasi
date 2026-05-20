@@ -96,6 +96,18 @@ export async function GET() {
       await query("ALTER TABLE orders ADD COLUMN payment_method_name VARCHAR(100) DEFAULT NULL");
       console.log('Added payment_method_name column to orders');
     }
+    if (!orderColumnNames.includes('payment_uploaded_at')) {
+      await query("ALTER TABLE orders ADD COLUMN payment_uploaded_at DATETIME DEFAULT NULL");
+      console.log('Added payment_uploaded_at column to orders');
+    }
+    if (!orderColumnNames.includes('payment_verified_at')) {
+      await query("ALTER TABLE orders ADD COLUMN payment_verified_at DATETIME DEFAULT NULL");
+      console.log('Added payment_verified_at column to orders');
+    }
+    if (!orderColumnNames.includes('payment_verified_by')) {
+      await query("ALTER TABLE orders ADD COLUMN payment_verified_by INT DEFAULT NULL");
+      console.log('Added payment_verified_by column to orders');
+    }
 
     // 8. Seed initial payment methods if payment_methods is empty
     const currentMethods: any = await query("SELECT COUNT(*) as count FROM payment_methods");

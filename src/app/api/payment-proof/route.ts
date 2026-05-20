@@ -2,72 +2,101 @@ import { NextRequest, NextResponse } from 'next/server';
 import { writeFile, mkdir } from 'fs/promises';
 import { existsSync } from 'fs';
 import path from 'path';
+import { getServerSession } from "next-auth/next";
+import { authOptions } from "@/lib/auth";
+import { query } from '@/lib/db';
 
 export async function POST(request: NextRequest) {
   try {
+    // 1. Session Auth Validation
+    const session = await getServerSession(authOptions);
+    if (!session || !session.user) {
+      return NextResponse.json({ error: 'Unauthorized. Silakan login terlebih dahulu.' }, { status: 401 });
+    }
+
+    const userId = (session.user as any).id;
+    const userRole = (session.user as any).role;
+    const isAdmin = userRole === 'admin';
+
+    // 2. Extract Multipart Form Data
     const formData = await request.formData();
     const file = formData.get('file') as File;
-    const orderId = formData.get('orderId') as string;
+    const orderIdStr = formData.get('orderId') as string;
 
     if (!file) {
-      return NextResponse.json(
-        { error: 'No file provided' },
-        { status: 400 }
-      );
+      return NextResponse.json({ error: 'No file provided' }, { status: 400 });
     }
 
-    if (!orderId) {
-      return NextResponse.json(
-        { error: 'Order ID is required' },
-        { status: 400 }
-      );
+    if (!orderIdStr) {
+      return NextResponse.json({ error: 'Order ID is required' }, { status: 400 });
     }
 
-    // Validate file type
+    const orderId = parseInt(orderIdStr, 10);
+    
+    // 3. Validate order ownership
+    const orders: any[] = await query(`SELECT user_id, status FROM orders WHERE id = ?`, [orderId]) as any[];
+    if (!orders || orders.length === 0) {
+      return NextResponse.json({ error: 'Order tidak ditemukan.' }, { status: 404 });
+    }
+
+    const order = orders[0];
+    if (!isAdmin && order.user_id !== userId) {
+      return NextResponse.json({ error: 'Akses ditolak. Anda tidak berhak mengunggah bukti untuk pesanan ini.' }, { status: 403 });
+    }
+
+    if (order.status === 'completed' || order.status === 'cancelled') {
+        return NextResponse.json({ error: `Tidak bisa upload bukti pembayaran untuk pesanan dengan status ${order.status}` }, { status: 400 });
+    }
+
+    // 4. Validate file type
     const allowedTypes = ['image/jpeg', 'image/png', 'image/webp', 'image/gif'];
-    if (!allowedTypes.includes(file.type)) {
+    if (!file.type || !allowedTypes.includes(file.type.toLowerCase())) {
       return NextResponse.json(
-        { error: 'Only JPEG, PNG, WebP, and GIF files are allowed' },
+        { error: 'Hanya file JPEG, PNG, WebP, dan GIF yang diizinkan' },
         { status: 400 }
       );
     }
 
-    // Validate file size (max 5MB)
+    // 5. Validate file size (max 5MB)
     if (file.size > 5 * 1024 * 1024) {
       return NextResponse.json(
-        { error: 'File size must not exceed 5MB' },
+        { error: 'Ukuran file tidak boleh lebih dari 5MB' },
         { status: 400 }
       );
     }
 
-    // Create directory if it doesn't exist
+    // 6. Create directory if it doesn't exist
     const uploadDir = path.join(process.cwd(), 'public', 'payment-proofs');
     if (!existsSync(uploadDir)) {
       await mkdir(uploadDir, { recursive: true });
     }
 
-    // Generate filename
+    // 7. Generate filename and save file
     const timestamp = Date.now();
-    const extension = file.name.split('.').pop();
+    const extension = file.name.split('.').pop() || 'jpg';
     const filename = `payment-proof-${orderId}-${timestamp}.${extension}`;
     const filepath = path.join(uploadDir, filename);
 
-    // Convert file to buffer and save
     const bytes = await file.arrayBuffer();
     const buffer = Buffer.from(bytes);
     await writeFile(filepath, buffer);
 
-    // Return the path to be stored in database
     const imagePath = `/payment-proofs/${filename}`;
+
+    // 8. Update database
+    await query(
+      `UPDATE orders SET payment_proof_url = ?, payment_status = 'pending', payment_uploaded_at = NOW() WHERE id = ?`,
+      [imagePath, orderId]
+    );
 
     return NextResponse.json(
       { message: 'Payment proof uploaded successfully', imagePath },
       { status: 201 }
     );
-  } catch (error) {
+  } catch (error: any) {
     console.error('Error uploading payment proof:', error);
     return NextResponse.json(
-      { error: 'Failed to upload payment proof' },
+      { error: error.message || 'Failed to upload payment proof' },
       { status: 500 }
     );
   }

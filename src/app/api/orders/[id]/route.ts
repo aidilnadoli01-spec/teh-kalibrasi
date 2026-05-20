@@ -214,6 +214,12 @@ export async function PUT(
       }
       updateFields.push('payment_status = ?');
       updateValues.push(payment_status);
+
+      if (payment_status === 'verified') {
+        updateFields.push('payment_verified_at = NOW()');
+        updateFields.push('payment_verified_by = ?');
+        updateValues.push((session.user as any).id);
+      }
     }
     if (notes !== undefined) {
       updateFields.push('notes = ?');
