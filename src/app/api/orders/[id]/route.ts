@@ -26,6 +26,21 @@ export async function GET(
     }
     
     const order = (orders as any)[0];
+
+    // Fetch payment method details
+    if (order.payment_method_id) {
+      const pm: any = await query(`SELECT * FROM payment_methods WHERE id = ?`, [order.payment_method_id]);
+      order.payment_method_details = pm && pm.length > 0 ? pm[0] : null;
+    } else {
+      const typeMap: any = {
+        'bank_transfer': 'bank_transfer',
+        'ewallet': 'ewallet',
+        'cod': 'cod'
+      };
+      const type = typeMap[order.payment_method] || 'bank_transfer';
+      const pm: any = await query(`SELECT * FROM payment_methods WHERE type = ? AND is_active = 1 LIMIT 1`, [type]);
+      order.payment_method_details = pm && pm.length > 0 ? pm[0] : null;
+    }
     
     // Fetch order items
     const items = await query(`

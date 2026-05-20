@@ -4,6 +4,32 @@ import { getServerSession } from "next-auth/next";
 import { authOptions } from "@/lib/auth";
 import { sendEmail, orderConfirmationTemplate } from '@/lib/email';
 
+async function attachPaymentDetails(order: any) {
+  if (!order) return order;
+  if (order.payment_method_id) {
+    const methods: any = await query(`SELECT * FROM payment_methods WHERE id = ?`, [order.payment_method_id]);
+    if (Array.isArray(methods) && methods.length > 0) {
+      order.payment_method_details = methods[0];
+      return order;
+    }
+  }
+  
+  // Fallback for legacy orders
+  const typeMap: any = {
+    'bank_transfer': 'bank_transfer',
+    'ewallet': 'ewallet',
+    'cod': 'cod'
+  };
+  const type = typeMap[order.payment_method] || 'bank_transfer';
+  const methods: any = await query(`SELECT * FROM payment_methods WHERE type = ? AND is_active = 1 LIMIT 1`, [type]);
+  if (Array.isArray(methods) && methods.length > 0) {
+    order.payment_method_details = methods[0];
+  } else {
+    order.payment_method_details = null;
+  }
+  return order;
+}
+
 export async function GET(request: NextRequest) {
   try {
     const searchParams = request.nextUrl.searchParams;
@@ -32,6 +58,7 @@ export async function GET(request: NextRequest) {
       }
 
       const order = (orders as any[])[0];
+      await attachPaymentDetails(order);
       const items = await query(`
         SELECT oi.product_id, oi.quantity, oi.price, p.name as product_name
         FROM order_items oi
@@ -59,6 +86,7 @@ export async function GET(request: NextRequest) {
     // For each order, fetch its items
     const ordersWithItems = await Promise.all(
       ordersArray.map(async (order: any) => {
+        await attachPaymentDetails(order);
         const items = await query(`
           SELECT oi.product_id, oi.quantity, oi.price, p.name as product_name
           FROM order_items oi
@@ -83,7 +111,7 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   const body = await request.json();
-  const { customerName, customerEmail, customerPhone, customerAddress, items, totalPrice, paymentMethod } = body;
+  const { customerName, customerEmail, customerPhone, customerAddress, items, totalPrice, paymentMethod, paymentMethodId, paymentMethodName } = body;
 
   // Validate input
   if (!customerName || !customerEmail || !items || !totalPrice) {
@@ -92,8 +120,6 @@ export async function POST(request: NextRequest) {
       { status: 400 }
     );
   }
-
-  const method = paymentMethod || 'bank_transfer';
 
   // Fetch session to attach user_id if logged in
   const session = await getServerSession(authOptions);
@@ -109,14 +135,54 @@ export async function POST(request: NextRequest) {
   await connection.beginTransaction();
 
   try {
+    let method = paymentMethod || 'bank_transfer';
+    let finalPaymentMethodId = null;
+    let finalPaymentMethodName = null;
+
+    if (paymentMethodId) {
+      const [methods]: any[] = await connection.execute(
+        `SELECT * FROM payment_methods WHERE id = ? AND is_active = 1`,
+        [paymentMethodId]
+      );
+      if (!methods || methods.length === 0) {
+        await connection.rollback();
+        return NextResponse.json(
+          { error: 'Metode pembayaran tidak valid atau dinonaktifkan.' },
+          { status: 400 }
+        );
+      }
+      const pm = methods[0];
+      finalPaymentMethodId = pm.id;
+      finalPaymentMethodName = pm.method_name;
+      
+      // Map type to legacy payment_method enum ('bank_transfer', 'ewallet', 'cod')
+      if (pm.type === 'qris') {
+        method = 'ewallet';
+      } else {
+        method = pm.type;
+      }
+    } else {
+      // Legacy fallback
+      const [methods]: any[] = await connection.execute(
+        `SELECT * FROM payment_methods WHERE type = ? AND is_active = 1 LIMIT 1`,
+        [method]
+      );
+      if (methods && methods.length > 0) {
+        finalPaymentMethodId = methods[0].id;
+        finalPaymentMethodName = methods[0].method_name;
+      } else {
+        finalPaymentMethodName = method === 'bank_transfer' ? 'Bank Transfer' : method === 'ewallet' ? 'E-Wallet' : 'COD';
+      }
+    }
+
     // Generate unique order number
     const orderNumber = `TK-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
 
     // Insert order
     const [insertOrderResult]: any = await connection.execute(
-      `INSERT INTO orders (user_id, order_number, customer_name, customer_email, customer_phone, customer_address, subtotal, total_price, status, payment_method, payment_status) 
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'pending', ?, 'unpaid')`,
-      [userId, orderNumber, customerName, customerEmail, customerPhone, customerAddress, totalPrice, totalPrice, method]
+      `INSERT INTO orders (user_id, order_number, customer_name, customer_email, customer_phone, customer_address, subtotal, total_price, status, payment_method, payment_status, payment_method_id, payment_method_name) 
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'pending', ?, 'unpaid', ?, ?)`,
+      [userId, orderNumber, customerName, customerEmail, customerPhone, customerAddress, totalPrice, totalPrice, method, finalPaymentMethodId, finalPaymentMethodName]
     );
 
     const orderId = insertOrderResult.insertId;

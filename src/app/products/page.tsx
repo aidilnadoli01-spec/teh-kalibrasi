@@ -734,6 +734,31 @@ function CheckoutModal({
 }) {
   const { data: session } = useSession();
   
+  const [paymentMethods, setPaymentMethods] = useState<any[]>([]);
+  const [selectedMethodId, setSelectedMethodId] = useState<number | null>(null);
+  const [loadingPayments, setLoadingPayments] = useState(false);
+
+  React.useEffect(() => {
+    const getPaymentMethods = async () => {
+      setLoadingPayments(true);
+      try {
+        const response = await fetch('/api/payment-methods?active=true');
+        const data = await response.json();
+        if (Array.isArray(data)) {
+          setPaymentMethods(data);
+          if (data.length > 0) {
+            setSelectedMethodId(data[0].id);
+          }
+        }
+      } catch (err) {
+        console.error('Error fetching active payment methods:', err);
+      } finally {
+        setLoadingPayments(false);
+      }
+    };
+    getPaymentMethods();
+  }, []);
+
   const [formData, setFormData] = useState({
     customerName: session?.user?.name || '',
     customerEmail: session?.user?.email || '',
@@ -785,12 +810,16 @@ function CheckoutModal({
     setLoading(true);
     setError('');
 
+    const selectedPM = paymentMethods.find(pm => pm.id === selectedMethodId);
+
     try {
       const response = await fetch('/api/orders', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           ...formData,
+          paymentMethodId: selectedMethodId,
+          paymentMethodName: selectedPM ? selectedPM.method_name : null,
           items: cart.map((item) => ({
             productId: item.productId,
             quantity: item.quantity,
@@ -913,17 +942,60 @@ function CheckoutModal({
 
 
           <div>
-            <label className="block text-white text-sm font-bold mb-2">Payment Method</label>
-            <select
-              name="paymentMethod"
-              value={formData.paymentMethod}
-              onChange={handleChange}
-              className="w-full px-4 py-2 bg-gray-800 text-white rounded border border-gray-700 focus:border-emerald-500 outline-none"
-            >
-              <option value="bank_transfer">Bank Transfer</option>
-              <option value="ewallet">E-Wallet (OVO, Dana, etc.)</option>
-              <option value="cod">Bayar di Tempat (Cash on Pickup)</option>
-            </select>
+            <label className="block text-white text-sm font-bold mb-2">Metode Pembayaran</label>
+            {loadingPayments ? (
+              <p className="text-white/50 text-xs animate-pulse">Memuat metode pembayaran...</p>
+            ) : paymentMethods.length === 0 ? (
+              <p className="text-red-400 text-xs">Tidak ada metode pembayaran aktif. Hubungi Admin.</p>
+            ) : (
+              <div className="grid grid-cols-1 gap-3 max-h-60 overflow-y-auto pr-1">
+                {paymentMethods.map((pm) => {
+                  const isSelected = selectedMethodId === pm.id;
+                  return (
+                    <div
+                      key={pm.id}
+                      onClick={() => setSelectedMethodId(pm.id)}
+                      className={`flex items-center justify-between p-3.5 rounded-xl border-2 transition-all cursor-pointer select-none ${
+                        isSelected
+                          ? 'bg-emerald-500/10 border-emerald-500 shadow-[0_0_15px_rgba(16,185,129,0.15)]'
+                          : 'bg-gray-800 border-gray-700 hover:border-gray-600'
+                      }`}
+                    >
+                      <div className="flex items-center gap-3">
+                        {pm.logo ? (
+                          <div className="w-10 h-10 bg-white rounded-lg flex items-center justify-center p-1 overflow-hidden shrink-0">
+                            <img
+                              src={pm.logo}
+                              alt={pm.method_name}
+                              className="w-full h-full object-contain"
+                            />
+                          </div>
+                        ) : (
+                          <div className="w-10 h-10 bg-gray-900 rounded-lg flex items-center justify-center text-lg shrink-0">
+                            💳
+                          </div>
+                        )}
+                        <div>
+                          <p className="text-white font-bold text-sm leading-tight">{pm.method_name}</p>
+                          {pm.description && (
+                            <p className="text-white/40 text-xs mt-0.5 line-clamp-1">{pm.description}</p>
+                          )}
+                        </div>
+                      </div>
+                      <div className="shrink-0 flex items-center justify-center">
+                        <div
+                          className={`w-5 h-5 rounded-full border-2 flex items-center justify-center transition-all ${
+                            isSelected ? 'border-emerald-500' : 'border-gray-500'
+                          }`}
+                        >
+                          {isSelected && <div className="w-2.5 h-2.5 rounded-full bg-emerald-500" />}
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
           </div>
 
           <div className="bg-gray-800/50 border border-gray-700 rounded p-4 mb-4">

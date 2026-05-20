@@ -24,6 +24,42 @@ interface Order {
   bank_account_number: string | null;
   created_at: string;
   items: any[];
+  payment_method_id?: number | null;
+  payment_method_name?: string | null;
+  payment_method_details?: {
+    id: number;
+    type: 'bank_transfer' | 'ewallet' | 'qris' | 'cod';
+    method_name: string;
+    logo_url: string | null;
+    account_number: string | null;
+    account_name: string | null;
+    qr_code_url: string | null;
+    is_active: number;
+    description: string | null;
+  } | null;
+}
+
+function CopyButton({ text, label = 'Salin' }: { text: string; label?: string }) {
+  const [copied, setCopied] = useState(false);
+  const handleCopy = async () => {
+    try {
+      await navigator.clipboard.writeText(text);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } catch (err) {
+      console.error('Failed to copy text: ', err);
+    }
+  };
+  return (
+    <button
+      type="button"
+      onClick={handleCopy}
+      className="ml-2 px-3 py-1 text-xs font-semibold bg-emerald-500/20 text-emerald-400 hover:bg-emerald-500/30 hover:text-emerald-300 rounded border border-emerald-500/30 transition-all flex items-center gap-1 active:scale-95"
+    >
+      <span>{copied ? '✓' : '📋'}</span>
+      <span>{copied ? 'Tersalin!' : label}</span>
+    </button>
+  );
 }
 
 export default function TrackOrderPage() {
@@ -34,6 +70,7 @@ export default function TrackOrderPage() {
   const [error, setError] = useState('');
   const [uploadingProof, setUploadingProof] = useState(false);
   const [proofMessage, setProofMessage] = useState('');
+  const [isQrZoomed, setIsQrZoomed] = useState(false);
 
   const { data: session, status } = useSession();
   const router = useRouter();
@@ -151,8 +188,11 @@ export default function TrackOrderPage() {
     }
   };
 
-  const getPaymentMethodLabel = (method: string) => {
-    switch (method) {
+  const getPaymentMethodLabel = (order: Order) => {
+    if (order.payment_method_name) {
+      return order.payment_method_name;
+    }
+    switch (order.payment_method) {
       case 'bank_transfer':
         return 'Bank Transfer';
       case 'ewallet':
@@ -160,7 +200,7 @@ export default function TrackOrderPage() {
       case 'cod':
         return 'Bayar di Tempat (Pickup)';
       default:
-        return method;
+        return order.payment_method;
     }
   };
 
@@ -345,42 +385,142 @@ export default function TrackOrderPage() {
                 <div className="space-y-4">
                   <div className="flex flex-col md:flex-row md:justify-between md:items-center pb-3 border-b border-white/10 gap-1">
                     <span className="text-white/60">Payment Method:</span>
-                    <span className="text-white font-bold">{getPaymentMethodLabel(order.payment_method)}</span>
+                    <span className="text-white font-bold">{getPaymentMethodLabel(order)}</span>
                   </div>
                   <div className="flex flex-col md:flex-row md:justify-between md:items-center pb-3 border-b border-white/10 gap-1">
                     <span className="text-white/60">Total Amount:</span>
                     <span className="text-emerald-500 font-bold text-xl">{formatCurrency(parseFloat(String(order.total_price)))}</span>
                   </div>
 
-                  {/* Bank Details for Bank Transfer */}
-                  {order.payment_method === 'bank_transfer' && (order.bank_name || order.bank_account_name || order.bank_account_number) && (
-                    <div className="bg-blue-500/10 border border-blue-500/30 rounded-lg p-4">
-                      <p className="text-blue-500 font-bold text-sm mb-3">💳 Transfer ke Rekening Berikut:</p>
-                      <div className="space-y-2">
-                        {order.bank_name && (
-                          <div>
-                            <p className="text-white/60 text-xs">Bank</p>
-                            <p className="text-white font-bold">{order.bank_name}</p>
+                  {/* Dynamic Payment Method Details */}
+                  {order.payment_method_details ? (
+                    <div className="bg-emerald-950/20 border border-emerald-500/30 rounded-lg p-5 mt-4">
+                      <div className="flex items-center gap-3 mb-4">
+                        {order.payment_method_details.logo_url ? (
+                          <img
+                            src={order.payment_method_details.logo_url}
+                            alt={order.payment_method_details.method_name}
+                            className="h-8 object-contain rounded bg-white/10 p-1"
+                          />
+                        ) : (
+                          <div className="w-8 h-8 rounded bg-emerald-500/10 flex items-center justify-center font-bold text-emerald-400 text-sm">
+                            {order.payment_method_details.method_name.substring(0, 2).toUpperCase()}
                           </div>
                         )}
-                        {order.bank_account_name && (
-                          <div>
-                            <p className="text-white/60 text-xs">Nama Rekening</p>
-                            <p className="text-white font-bold">{order.bank_account_name}</p>
-                          </div>
-                        )}
-                        {order.bank_account_number && (
-                          <div>
-                            <p className="text-white/60 text-xs">No. Rekening</p>
-                            <p className="text-white font-bold text-lg tracking-wider">{order.bank_account_number}</p>
-                          </div>
-                        )}
+                        <div>
+                          <p className="text-white font-bold text-base leading-tight">
+                            {order.payment_method_details.method_name}
+                          </p>
+                          <p className="text-white/40 text-xs mt-0.5">
+                            {order.payment_method_details.type === 'bank_transfer'
+                              ? 'Transfer Bank'
+                              : order.payment_method_details.type === 'ewallet'
+                              ? 'E-Wallet'
+                              : order.payment_method_details.type === 'qris'
+                              ? 'QRIS'
+                              : 'Bayar di Tempat (COD)'}
+                          </p>
+                        </div>
                       </div>
+
+                      {order.payment_method_details.type === 'qris' && order.payment_method_details.qr_code_url && (
+                        <div className="flex flex-col items-center justify-center bg-black/40 rounded-lg p-4 border border-white/5">
+                          <p className="text-emerald-400 font-semibold text-sm mb-3">📸 Pindai Kode QRIS di bawah:</p>
+                          
+                          <div 
+                            className="relative group cursor-zoom-in overflow-hidden rounded-lg bg-white p-2 border border-emerald-500/30 hover:border-emerald-500 transition-all max-w-[200px]"
+                            onClick={() => setIsQrZoomed(true)}
+                          >
+                            <img
+                              src={order.payment_method_details.qr_code_url}
+                              alt="QRIS Code"
+                              className="w-full h-auto object-contain transition-transform group-hover:scale-105"
+                            />
+                            <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-all text-white text-xs font-bold gap-1">
+                              🔍 Perbesar
+                            </div>
+                          </div>
+
+                          <p className="text-white/60 text-xs text-center mt-3 max-w-sm">
+                            {order.payment_method_details.description || 'Pindai kode QR di atas menggunakan aplikasi e-wallet atau m-banking Anda.'}
+                          </p>
+                        </div>
+                      )}
+
+                      {(order.payment_method_details.type === 'bank_transfer' || order.payment_method_details.type === 'ewallet') && (
+                        <div className="space-y-4 bg-black/40 rounded-lg p-4 border border-white/5">
+                          {order.payment_method_details.account_name && (
+                            <div className="flex justify-between items-center pb-2 border-b border-white/5">
+                              <div>
+                                <p className="text-white/40 text-xs">Nama Pemilik Rekening / Akun</p>
+                                <p className="text-white font-semibold text-sm mt-0.5">{order.payment_method_details.account_name}</p>
+                              </div>
+                            </div>
+                          )}
+                          {order.payment_method_details.account_number && (
+                            <div className="flex justify-between items-center">
+                              <div>
+                                <p className="text-white/40 text-xs">Nomor Rekening / Akun</p>
+                                <p className="text-emerald-400 font-bold text-lg tracking-wider mt-0.5">
+                                  {order.payment_method_details.account_number}
+                                </p>
+                              </div>
+                              <CopyButton text={order.payment_method_details.account_number} label="Salin Nomor" />
+                            </div>
+                          )}
+                          {order.payment_method_details.description && (
+                            <div className="pt-2 border-t border-white/5">
+                              <p className="text-white/60 text-xs leading-relaxed">
+                                {order.payment_method_details.description}
+                              </p>
+                            </div>
+                          )}
+                        </div>
+                      )}
+
+                      {order.payment_method_details.type === 'cod' && (
+                        <div className="bg-emerald-500/10 border border-emerald-500/20 rounded-lg p-4 text-center">
+                          <p className="text-emerald-400 font-bold text-sm mb-1">🤝 Pembayaran Cash on Delivery (COD)</p>
+                          <p className="text-white/60 text-xs leading-relaxed max-w-sm mx-auto">
+                            {order.payment_method_details.description || 'Silakan siapkan uang tunai sesuai total tagihan saat mengambil pesanan di lokasi.'}
+                          </p>
+                        </div>
+                      )}
                     </div>
+                  ) : (
+                    /* Fallback to legacy bank transfer */
+                    order.payment_method === 'bank_transfer' && (order.bank_name || order.bank_account_name || order.bank_account_number) && (
+                      <div className="bg-blue-500/10 border border-blue-500/30 rounded-lg p-4 mt-4">
+                        <p className="text-blue-500 font-bold text-sm mb-3">💳 Transfer ke Rekening Berikut:</p>
+                        <div className="space-y-2">
+                          {order.bank_name && (
+                            <div>
+                              <p className="text-white/60 text-xs">Bank</p>
+                              <p className="text-white font-bold">{order.bank_name}</p>
+                            </div>
+                          )}
+                          {order.bank_account_name && (
+                            <div>
+                              <p className="text-white/60 text-xs">Nama Rekening</p>
+                              <p className="text-white font-bold">{order.bank_account_name}</p>
+                            </div>
+                          )}
+                          {order.bank_account_number && (
+                            <div className="flex justify-between items-center">
+                              <div>
+                                <p className="text-white/60 text-xs">No. Rekening</p>
+                                <p className="text-white font-bold text-lg tracking-wider">{order.bank_account_number}</p>
+                              </div>
+                              <CopyButton text={order.bank_account_number} label="Salin Nomor" />
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    )
                   )}
 
                   {/* Payment Proof Upload */}
-                  {order.payment_status !== 'verified' && order.payment_method !== 'cod' && (
+                  {order.payment_status !== 'verified' && !(order.payment_method === 'cod' || order.payment_method_details?.type === 'cod') && (
                     <div className="mt-6 pt-6 border-t border-white/10">
                       <p className="text-white text-sm mb-4">
                         {order.payment_proof_url ? 'Update your payment proof:' : 'Upload your payment proof:'}
@@ -431,6 +571,44 @@ export default function TrackOrderPage() {
           )}
         </div>
       </div>
+
+      {/* Zoomed QRIS Modal */}
+      {isQrZoomed && order && order.payment_method_details && order.payment_method_details.qr_code_url && (
+        <div 
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/90 p-4 transition-all duration-300 backdrop-blur-sm cursor-zoom-out"
+          onClick={() => setIsQrZoomed(false)}
+        >
+          <motion.div
+            initial={{ opacity: 0, scale: 0.9 }}
+            animate={{ opacity: 1, scale: 1 }}
+            className="relative bg-white p-4 rounded-2xl max-w-md w-full border border-emerald-500/50 shadow-[0_0_50px_rgba(16,185,129,0.3)]"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex justify-between items-center mb-3">
+              <h4 className="text-black font-bold text-lg">{order.payment_method_details.method_name} - QRIS</h4>
+              <button 
+                onClick={() => setIsQrZoomed(false)}
+                className="w-8 h-8 rounded-full bg-gray-100 hover:bg-gray-200 text-gray-700 flex items-center justify-center font-bold text-lg transition-all"
+              >
+                ✕
+              </button>
+            </div>
+            
+            <div className="bg-white rounded-lg p-2 border border-gray-200">
+              <img
+                src={order.payment_method_details.qr_code_url}
+                alt="Zoomed QRIS Code"
+                className="w-full h-auto object-contain max-h-[70vh]"
+              />
+            </div>
+
+            <div className="text-center mt-4">
+              <p className="text-black/60 text-xs">Pindai QR Code di atas dengan aplikasi pembayaran Anda.</p>
+              <p className="text-emerald-600 font-bold text-sm mt-1">Total Tagihan: {formatCurrency(parseFloat(String(order.total_price)))}</p>
+            </div>
+          </motion.div>
+        </div>
+      )}
 
       <Footer />
     </div>

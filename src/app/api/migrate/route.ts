@@ -65,9 +65,57 @@ export async function GET() {
     `);
     console.log('Created inventory_logs table if not exists');
 
+    // 6. Create payment_methods table if it doesn't exist
+    await query(`
+      CREATE TABLE IF NOT EXISTS payment_methods (
+        id INT PRIMARY KEY AUTO_INCREMENT,
+        type VARCHAR(50) NOT NULL,
+        method_name VARCHAR(100) NOT NULL,
+        account_name VARCHAR(100) DEFAULT NULL,
+        account_number VARCHAR(100) DEFAULT NULL,
+        qr_image VARCHAR(255) DEFAULT NULL,
+        logo VARCHAR(255) DEFAULT NULL,
+        description TEXT DEFAULT NULL,
+        is_active TINYINT(1) DEFAULT 1,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      )
+    `);
+    console.log('Created payment_methods table if not exists');
+
+    // 7. Alter orders table to add payment_method_id and payment_method_name if they don't exist
+    const orderColumns: any = await query(
+      "SELECT COLUMN_NAME FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'orders'"
+    );
+    const orderColumnNames = orderColumns.map((c: any) => c.COLUMN_NAME.toLowerCase());
+    
+    if (!orderColumnNames.includes('payment_method_id')) {
+      await query("ALTER TABLE orders ADD COLUMN payment_method_id INT DEFAULT NULL");
+      console.log('Added payment_method_id column to orders');
+    }
+    if (!orderColumnNames.includes('payment_method_name')) {
+      await query("ALTER TABLE orders ADD COLUMN payment_method_name VARCHAR(100) DEFAULT NULL");
+      console.log('Added payment_method_name column to orders');
+    }
+
+    // 8. Seed initial payment methods if payment_methods is empty
+    const currentMethods: any = await query("SELECT COUNT(*) as count FROM payment_methods");
+    if (currentMethods && currentMethods[0] && currentMethods[0].count === 0) {
+      await query(`
+        INSERT INTO payment_methods (type, method_name, account_name, account_number, description, logo, is_active) VALUES
+        ('bank_transfer', 'BCA', 'Tehkalibrasi Mandiri', '1234567890', 'Transfer ke bank BCA terdekat Anda.', '/logos/bca.png', 1),
+        ('ewallet', 'Dana', 'Ahmad Tehkalibrasi', '08123456789', 'Transfer ke akun DANA kami.', '/logos/dana.png', 1),
+        ('ewallet', 'OVO', 'Ahmad Tehkalibrasi', '08123456789', 'Transfer ke akun OVO kami.', '/logos/ovo.png', 1),
+        ('ewallet', 'GoPay', 'Ahmad Tehkalibrasi', '08123456789', 'Transfer ke akun GoPay kami.', '/logos/gopay.png', 1),
+        ('ewallet', 'ShopeePay', 'Ahmad Tehkalibrasi', '08123456789', 'Transfer ke akun ShopeePay kami.', '/logos/shopeepay.png', 1),
+        ('qris', 'QRIS', 'TEHKALIBRASI', '', 'Scan kode QRIS ini untuk pembayaran instant.', '/logos/qris.png', 1),
+        ('cod', 'COD', '', '', 'Bayar tunai di lokasi pengambilan (Pickup).', '/logos/cod.png', 1)
+      `);
+      console.log('Seeded default payment methods');
+    }
+
     return NextResponse.json({ 
       success: true, 
-      message: 'Migration completed successfully. Status column, OTP verification columns, and inventory logs table are ready.' 
+      message: 'Migration completed successfully. Status column, OTP columns, inventory logs, and payment systems are ready.' 
     });
   } catch (error: any) {
     console.error('Migration error:', error);
