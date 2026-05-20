@@ -2,8 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from "next-auth/next";
 import { authOptions } from "@/lib/auth";
 import { query } from '@/lib/db';
-import { createClient } from '@supabase/supabase-js';
-
+import { put } from '@vercel/blob';
 export async function POST(request: NextRequest) {
   try {
     // 1. Session Auth Validation
@@ -63,44 +62,33 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // 6. Initialize Supabase Client
-    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
-    const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
-
-    if (!supabaseUrl || !supabaseKey) {
-      console.error('Supabase credentials missing.');
+    // 6. Check for Vercel Blob Token
+    if (!process.env.BLOB_READ_WRITE_TOKEN) {
+      console.error('Vercel Blob token missing.');
       return NextResponse.json({ error: 'Sistem penyimpanan cloud belum dikonfigurasi. Hubungi Admin.' }, { status: 500 });
     }
 
-    const supabase = createClient(supabaseUrl, supabaseKey);
-
-    // 7. Upload to Supabase Storage
+    // 7. Upload to Vercel Blob
     const timestamp = Date.now();
     const extension = file.name.split('.').pop() || 'jpg';
     const filename = `payment-proof-${orderId}-${timestamp}.${extension}`;
-    const storagePath = `${userId}/${filename}`; // Folder based on userId
+    const storagePath = `payment-proofs/${userId}/${filename}`; // Folder based on userId
 
     const bytes = await file.arrayBuffer();
     const buffer = Buffer.from(bytes);
 
-    const { data: uploadData, error: uploadError } = await supabase.storage
-      .from('payment-proofs')
-      .upload(storagePath, buffer, {
+    let blob;
+    try {
+      blob = await put(storagePath, buffer, {
+        access: 'public',
         contentType: file.type,
-        upsert: true,
       });
-
-    if (uploadError) {
-      console.error('Supabase upload error:', uploadError);
+    } catch (uploadError: any) {
+      console.error('Vercel Blob upload error:', uploadError);
       return NextResponse.json({ error: 'Gagal mengunggah file ke cloud storage: ' + uploadError.message }, { status: 500 });
     }
 
-    // Get Public URL
-    const { data: { publicUrl } } = supabase.storage
-      .from('payment-proofs')
-      .getPublicUrl(storagePath);
-
-    const imagePath = publicUrl;
+    const imagePath = blob.url;
 
     // 8. Update database
     await query(
