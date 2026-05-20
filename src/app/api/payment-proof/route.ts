@@ -40,7 +40,7 @@ export async function POST(request: NextRequest) {
     }
 
     const order = orders[0];
-    if (!isAdmin && order.user_id !== userId) {
+    if (!isAdmin && String(order.user_id) !== String(userId)) {
       return NextResponse.json({ error: 'Akses ditolak. Anda tidak berhak mengunggah bukti untuk pesanan ini.' }, { status: 403 });
     }
 

@@ -42,7 +42,7 @@ export async function GET(
     const order = (orders as any)[0];
 
     // Auth check: Regular user can only view their own orders
-    if (!isAdmin && order.user_id !== userId) {
+    if (!isAdmin && String(order.user_id) !== String(userId)) {
       return NextResponse.json(
         { error: 'Akses ditolak. Anda tidak memiliki izin untuk mengakses pesanan ini.' },
         { status: 403 }
