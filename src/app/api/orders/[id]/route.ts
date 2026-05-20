@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { query, getConnection } from '@/lib/db';
+import { getServerSession } from "next-auth/next";
+import { authOptions } from "@/lib/auth";
 import {
   sendEmail,
   paymentVerifiedTemplate,
@@ -12,6 +14,18 @@ export async function GET(
   { params }: { params: Promise<{ id: string }> | { id: string } }
 ) {
   try {
+    const session = await getServerSession(authOptions);
+    if (!session || !session.user) {
+      return NextResponse.json(
+        { error: 'Unauthorized. Silakan login terlebih dahulu.' },
+        { status: 401 }
+      );
+    }
+
+    const userId = (session.user as any).id;
+    const userRole = (session.user as any).role;
+    const isAdmin = userRole === 'admin';
+
     const resolvedParams = await Promise.resolve(params);
     const orderId = resolvedParams.id;
     
@@ -20,12 +34,20 @@ export async function GET(
     
     if (!orders || orders.length === 0) {
       return NextResponse.json(
-        { error: 'Order not found' },
+        { error: 'Order tidak ditemukan' },
         { status: 404 }
       );
     }
     
     const order = (orders as any)[0];
+
+    // Auth check: Regular user can only view their own orders
+    if (!isAdmin && order.user_id !== userId) {
+      return NextResponse.json(
+        { error: 'Akses ditolak. Anda tidak memiliki izin untuk mengakses pesanan ini.' },
+        { status: 403 }
+      );
+    }
 
     // Fetch payment method details
     if (order.payment_method_id) {
@@ -66,15 +88,30 @@ export async function PUT(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> | { id: string } }
 ) {
-  const resolvedParams = await Promise.resolve(params);
-  const orderId = resolvedParams.id;
-  const body = await request.json();
-  const { status, notes, payment_status, bank_name, bank_account_name, bank_account_number, customer_address } = body;
-
-  const connection = await getConnection();
-  await connection.beginTransaction();
-
   try {
+    const session = await getServerSession(authOptions);
+    if (!session || !session.user) {
+      return NextResponse.json(
+        { error: 'Unauthorized' },
+        { status: 401 }
+      );
+    }
+    if ((session.user as any).role !== 'admin') {
+      return NextResponse.json(
+        { error: 'Forbidden. Admin access required.' },
+        { status: 403 }
+      );
+    }
+
+    const resolvedParams = await Promise.resolve(params);
+    const orderId = resolvedParams.id;
+    const body = await request.json();
+    const { status, notes, payment_status, bank_name, bank_account_name, bank_account_number, customer_address } = body;
+
+    const connection = await getConnection();
+    await connection.beginTransaction();
+
+    try {
     // 1. Fetch old order details to verify status changes under row lock
     const [oldOrders]: any[] = await connection.execute(
       `SELECT status, user_id FROM orders WHERE id = ? FOR UPDATE`,
@@ -267,6 +304,13 @@ export async function PUT(
   } finally {
     await connection.end();
   }
+  } catch (error: any) {
+    console.error('Outer error updating order:', error);
+    return NextResponse.json(
+      { error: 'Failed to process request' },
+      { status: 500 }
+    );
+  }
 }
 
 export async function DELETE(
@@ -274,6 +318,20 @@ export async function DELETE(
   { params }: { params: Promise<{ id: string }> | { id: string } }
 ) {
   try {
+    const session = await getServerSession(authOptions);
+    if (!session || !session.user) {
+      return NextResponse.json(
+        { error: 'Unauthorized' },
+        { status: 401 }
+      );
+    }
+    if ((session.user as any).role !== 'admin') {
+      return NextResponse.json(
+        { error: 'Forbidden. Admin access required.' },
+        { status: 403 }
+      );
+    }
+
     const resolvedParams = await Promise.resolve(params);
     const id = resolvedParams.id;
     

@@ -32,6 +32,18 @@ async function attachPaymentDetails(order: any) {
 
 export async function GET(request: NextRequest) {
   try {
+    const session = await getServerSession(authOptions);
+    if (!session || !session.user) {
+      return NextResponse.json(
+        { error: 'Unauthorized. Silakan login terlebih dahulu.' },
+        { status: 401 }
+      );
+    }
+
+    const userId = (session.user as any).id;
+    const userRole = (session.user as any).role;
+    const isAdmin = userRole === 'admin';
+
     const searchParams = request.nextUrl.searchParams;
     const searchValue = searchParams.get('search');
     const searchType = searchParams.get('searchType');
@@ -41,18 +53,23 @@ export async function GET(request: NextRequest) {
     // If search parameters provided, search for single order
     if (searchValue && searchType) {
       if (searchType === 'id') {
-        orders = await query(`
-          SELECT * FROM orders WHERE id = ?
-        `, [parseInt(searchValue, 10)]);
+        const orderId = parseInt(searchValue, 10);
+        if (isAdmin) {
+          orders = await query(`SELECT * FROM orders WHERE id = ?`, [orderId]);
+        } else {
+          orders = await query(`SELECT * FROM orders WHERE id = ? AND user_id = ?`, [orderId, userId]);
+        }
       } else if (searchType === 'email') {
-        orders = await query(`
-          SELECT * FROM orders WHERE customer_email = ?
-        `, [searchValue]);
+        if (isAdmin) {
+          orders = await query(`SELECT * FROM orders WHERE customer_email = ?`, [searchValue]);
+        } else {
+          orders = await query(`SELECT * FROM orders WHERE customer_email = ? AND user_id = ?`, [searchValue, userId]);
+        }
       }
 
       if (!Array.isArray(orders) || orders.length === 0) {
         return NextResponse.json(
-          { error: 'Order not found' },
+          { error: 'Order tidak ditemukan atau Anda tidak memiliki akses.' },
           { status: 404 }
         );
       }
@@ -75,11 +92,21 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    // Fetch all orders (for admin)
-    orders = await query(`
-      SELECT * FROM orders
-      ORDER BY created_at DESC
-    `);
+    // Fetch orders list
+    if (isAdmin) {
+      // Fetch all orders for admin
+      orders = await query(`
+        SELECT * FROM orders
+        ORDER BY created_at DESC
+      `);
+    } else {
+      // Fetch only user's own orders for regular user
+      orders = await query(`
+        SELECT * FROM orders
+        WHERE user_id = ?
+        ORDER BY created_at DESC
+      `, [userId]);
+    }
     
     const ordersArray = Array.isArray(orders) ? orders : [];
     
