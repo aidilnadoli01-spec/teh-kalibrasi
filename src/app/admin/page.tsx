@@ -1422,60 +1422,7 @@ export default function AdminPage() {
                             </div>
                           )}
 
-                          {/* Bank Details for Bank Transfer */}
-                          {selectedOrder.payment_method === 'bank_transfer' && (
-                            <div className="border-t border-white/20 pt-3 mt-3">
-                              <p className="text-white/60 text-xs mb-2 font-bold">Bank Details</p>
-                              <div className="space-y-2">
-                                <div>
-                                  <input
-                                    type="text"
-                                    placeholder="Nama Bank (cth. BCA, Mandiri)"
-                                    value={bankName}
-                                    maxLength={30}
-                                    onChange={(e) => {
-                                      // Hanya huruf, spasi, dan titik
-                                      const val = e.target.value.replace(/[^a-zA-Z\s.]/g, '');
-                                      setBankName(val);
-                                    }}
-                                    className="w-full px-3 py-2 bg-white/10 text-white rounded border border-white/20 focus:border-emerald-500 outline-none text-sm placeholder-white/40"
-                                  />
-                                  <p className="text-white/30 text-xs mt-0.5">{bankName.length}/30 karakter — hanya huruf & spasi</p>
-                                </div>
-                                <div>
-                                  <input
-                                    type="text"
-                                    placeholder="Nama Pemilik Rekening"
-                                    value={bankAccountName}
-                                    maxLength={50}
-                                    onChange={(e) => {
-                                      // Hanya huruf dan spasi
-                                      const val = e.target.value.replace(/[^a-zA-Z\s]/g, '');
-                                      setBankAccountName(val);
-                                    }}
-                                    className="w-full px-3 py-2 bg-white/10 text-white rounded border border-white/20 focus:border-emerald-500 outline-none text-sm placeholder-white/40"
-                                  />
-                                  <p className="text-white/30 text-xs mt-0.5">{bankAccountName.length}/50 karakter — hanya huruf & spasi</p>
-                                </div>
-                                <div>
-                                  <input
-                                    type="text"
-                                    inputMode="numeric"
-                                    placeholder="Nomor Rekening (hanya angka)"
-                                    value={bankAccountNumber}
-                                    maxLength={20}
-                                    onChange={(e) => {
-                                      // Hanya angka
-                                      const val = e.target.value.replace(/\D/g, '');
-                                      setBankAccountNumber(val);
-                                    }}
-                                    className="w-full px-3 py-2 bg-white/10 text-white rounded border border-white/20 focus:border-emerald-500 outline-none text-sm placeholder-white/40 tracking-widest"
-                                  />
-                                  <p className="text-white/30 text-xs mt-0.5">{bankAccountNumber.length}/20 digit — hanya angka</p>
-                                </div>
-                              </div>
-                            </div>
-                          )}
+
                         </div>
                       </div>
 
