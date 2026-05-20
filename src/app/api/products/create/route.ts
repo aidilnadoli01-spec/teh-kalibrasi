@@ -91,11 +91,15 @@ export async function POST(request: NextRequest) {
       { message: 'Product created', id: productId },
       { status: 201 }
     );
-  } catch (error) {
+  } catch (error: any) {
     await connection.rollback();
     console.error('Error creating product:', error);
     return NextResponse.json(
-      { error: 'Failed to create product' },
+      { 
+        error: 'Failed to create product',
+        details: error?.message || String(error),
+        code: error?.code
+      },
       { status: 500 }
     );
   } finally {

@@ -519,7 +519,10 @@ export default function AdminPage() {
           fetchProducts();
         } else {
           const errorData = await response.json().catch(() => ({}));
-          showToast(errorData.error || 'Gagal memperbarui produk', 'error');
+          const errorMsg = errorData.details 
+            ? `${errorData.error || 'Gagal memperbarui produk'}: ${errorData.details}` 
+            : (errorData.error || 'Gagal memperbarui produk');
+          showToast(errorMsg, 'error');
         }
       } else {
         const response = await fetch('/api/products/create', {
@@ -533,7 +536,10 @@ export default function AdminPage() {
           fetchProducts();
         } else {
           const errorData = await response.json().catch(() => ({}));
-          showToast(errorData.error || 'Gagal membuat produk', 'error');
+          const errorMsg = errorData.details 
+            ? `${errorData.error || 'Gagal membuat produk'}: ${errorData.details}` 
+            : (errorData.error || 'Gagal membuat produk');
+          showToast(errorMsg, 'error');
         }
       }
     } catch (error) {

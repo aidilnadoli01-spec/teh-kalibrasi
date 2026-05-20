@@ -130,10 +130,14 @@ export async function PUT(
     } finally {
       await connection.end();
     }
-  } catch (error) {
+  } catch (error: any) {
     console.error('Error updating product:', error);
     return NextResponse.json(
-      { error: 'Failed to update product' },
+      { 
+        error: 'Failed to update product',
+        details: error?.message || String(error),
+        code: error?.code
+      },
       { status: 500 }
     );
   }
@@ -158,10 +162,14 @@ export async function DELETE(
       { message: 'Product deleted' },
       { status: 200 }
     );
-  } catch (error) {
+  } catch (error: any) {
     console.error('Error deleting product:', error);
     return NextResponse.json(
-      { error: 'Failed to delete product' },
+      { 
+        error: 'Failed to delete product',
+        details: error?.message || String(error),
+        code: error?.code
+      },
       { status: 500 }
     );
   }
