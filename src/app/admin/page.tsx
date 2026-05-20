@@ -68,6 +68,7 @@ export default function AdminPage() {
   // Orders
   const [orders, setOrders] = useState<Order[]>([]);
   const [loading, setLoading] = useState(false);
+  const [isUpdating, setIsUpdating] = useState(false);
   const [selectedOrder, setSelectedOrder] = useState<Order | null>(null);
   const [newStatus, setNewStatus] = useState('');
   const [notes, setNotes] = useState('');
@@ -222,7 +223,11 @@ export default function AdminPage() {
   };
 
   const updateOrderStatus = async (orderId: number) => {
-    if (!newStatus) return;
+    if (!newStatus) {
+      showToast('Status pesanan tidak boleh kosong!', 'error');
+      return;
+    }
+    setIsUpdating(true);
     try {
       const response = await fetch(`/api/orders/${orderId}`, {
         method: 'PUT',
@@ -237,17 +242,28 @@ export default function AdminPage() {
         }),
       });
       if (response.ok) {
-        showToast('Order updated successfully', 'success');
-        setSelectedOrder(null);
-        setNewStatus('');
-        setNotes('');
-        setBankName('');
-        setBankAccountName('');
-        setBankAccountNumber('');
+        showToast('Pesanan berhasil diupdate!', 'success');
         fetchOrders();
+        // Auto-sync
+        if (selectedOrder) {
+          setSelectedOrder({
+            ...selectedOrder,
+            status: newStatus as Order['status'],
+            notes,
+            bank_name: bankName,
+            bank_account_name: bankAccountName,
+            bank_account_number: bankAccountNumber,
+            customer_address: customerAddress
+          });
+        }
+      } else {
+        const error = await response.json().catch(() => ({}));
+        showToast(`Gagal update: ${error.error || response.statusText}`, 'error');
       }
     } catch (error) {
-      showToast('Failed to update order', 'error');
+      showToast('Terjadi kesalahan saat update pesanan', 'error');
+    } finally {
+      setIsUpdating(false);
     }
   };
 
@@ -1392,31 +1408,35 @@ export default function AdminPage() {
 
                           {/* Payment Proof */}
                           {selectedOrder.payment_proof_url && (
-                            <div className="bg-white/5 p-3 rounded border border-white/10 mt-2">
-                              <p className="text-white/60 text-xs mb-2 font-bold">Payment Proof</p>
+                            <div className="bg-white/5 p-4 rounded-xl border border-white/10 mt-3 shadow-inner">
+                              <p className="text-white/80 text-sm mb-3 font-bold flex items-center gap-2">
+                                📸 Bukti Pembayaran
+                              </p>
                               
-                              <div className="grid grid-cols-2 gap-2 mb-3">
+                              <div className="grid grid-cols-2 gap-4 mb-4 bg-black/20 p-3 rounded-lg">
                                 <div>
-                                  <p className="text-white/40 text-[10px]">Waktu Upload</p>
-                                  <p className="text-white text-xs">{selectedOrder.payment_uploaded_at ? new Date(selectedOrder.payment_uploaded_at).toLocaleString() : '-'}</p>
+                                  <p className="text-white/40 text-[10px] uppercase tracking-wider font-semibold">Waktu Upload</p>
+                                  <p className="text-emerald-400 text-xs mt-1 font-mono">{selectedOrder.payment_uploaded_at ? new Date(selectedOrder.payment_uploaded_at).toLocaleString() : '-'}</p>
                                 </div>
                                 <div>
-                                  <p className="text-white/40 text-[10px]">Waktu Verifikasi</p>
-                                  <p className="text-white text-xs">{selectedOrder.payment_verified_at ? new Date(selectedOrder.payment_verified_at).toLocaleString() : '-'}</p>
+                                  <p className="text-white/40 text-[10px] uppercase tracking-wider font-semibold">Waktu Verifikasi</p>
+                                  <p className="text-emerald-400 text-xs mt-1 font-mono">{selectedOrder.payment_verified_at ? new Date(selectedOrder.payment_verified_at).toLocaleString() : '-'}</p>
                                 </div>
                               </div>
 
                               <div 
-                                className="relative group cursor-zoom-in overflow-hidden rounded border border-emerald-500/30 hover:border-emerald-500 transition-all max-w-[200px]"
+                                className="relative group cursor-zoom-in overflow-hidden rounded-xl border-2 border-emerald-500/20 hover:border-emerald-500/60 transition-all duration-300 w-full sm:max-w-[240px] shadow-lg"
                                 onClick={() => setIsProofZoomed(true)}
                               >
                                 <img
                                   src={selectedOrder.payment_proof_url}
                                   alt="Payment proof"
-                                  className="w-full h-auto object-contain transition-transform group-hover:scale-105 max-h-48"
+                                  className="w-full h-auto object-contain transition-transform duration-500 group-hover:scale-110 max-h-56"
                                 />
-                                <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity">
-                                  <span className="text-white text-xs font-bold">🔍 Perbesar</span>
+                                <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent opacity-0 group-hover:opacity-100 flex items-end justify-center pb-4 transition-opacity duration-300">
+                                  <span className="text-white text-sm font-bold bg-black/50 px-3 py-1.5 rounded-full backdrop-blur-sm border border-white/20 shadow-xl">
+                                    🔍 Klik untuk Perbesar
+                                  </span>
                                 </div>
                               </div>
                             </div>
@@ -1429,37 +1449,41 @@ export default function AdminPage() {
                       {/* Order Items */}
                       {selectedOrder.items && selectedOrder.items.length > 0 && (
                         <div className="border-t border-white/20 pt-4 mt-4">
-                          <p className="text-white/60 text-sm mb-3 font-bold">Order Items</p>
-                          <div className="space-y-2">
+                          <p className="text-white/80 text-sm mb-3 font-bold flex items-center gap-2">🛒 Daftar Pesanan</p>
+                          <div className="space-y-3 bg-black/20 p-4 rounded-xl border border-white/5 shadow-inner">
                             {selectedOrder.items.map((item: any, idx: number) => (
-                              <div key={idx} className="flex justify-between text-sm text-white/80">
-                                <span>{item.product_name} x{item.quantity}</span>
-                                <span>{formatCurrency(parseFloat(String(item.price)))}</span>
+                              <div key={idx} className="flex justify-between items-center text-sm border-b border-white/5 pb-2 last:border-0 last:pb-0">
+                                <div className="flex flex-col">
+                                  <span className="text-white font-medium">{item.product_name}</span>
+                                  <span className="text-white/40 text-xs mt-0.5">{item.quantity} x {formatCurrency(parseFloat(String(item.price)) / item.quantity)}</span>
+                                </div>
+                                <span className="font-bold text-emerald-400 bg-emerald-500/10 px-2.5 py-1 rounded-md">{formatCurrency(parseFloat(String(item.price)))}</span>
                               </div>
                             ))}
                           </div>
                         </div>
                       )}
                     </div>
-                    <div className="space-y-2 mt-4">
+                    <div className="flex flex-col sm:flex-row gap-3 mt-6 pt-4 border-t border-white/10">
                       <button
                         onClick={() => updateOrderStatus(selectedOrder.id)}
-                        className="w-full py-2 bg-emerald-500 text-black font-bold rounded hover:bg-emerald-600 transition-all"
+                        disabled={isUpdating || !newStatus}
+                        className="flex-1 py-2.5 bg-emerald-500 text-black font-bold rounded-lg hover:bg-emerald-400 transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center shadow-[0_0_15px_rgba(16,185,129,0.3)] hover:shadow-[0_0_25px_rgba(16,185,129,0.5)]"
                       >
-                        Update
+                        {isUpdating ? 'Menyimpan...' : 'Update Status'}
                       </button>
                       <button
                         onClick={() => deleteOrder(selectedOrder.id)}
                         disabled={loading}
-                        className="w-full py-2 bg-red-500 text-white font-bold rounded hover:bg-red-600 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                        className="flex-1 py-2.5 bg-red-500/20 text-red-500 font-bold rounded-lg hover:bg-red-500 hover:text-white transition-all disabled:opacity-50 disabled:cursor-not-allowed border border-red-500/30"
                       >
-                        {loading ? 'Deleting...' : 'Delete'}
+                        {loading ? 'Menghapus...' : 'Hapus Order'}
                       </button>
                       <button
                         onClick={() => setSelectedOrder(null)}
-                        className="w-full py-2 bg-white/10 text-white font-bold rounded hover:bg-white/20 transition-all"
+                        className="flex-1 py-2.5 bg-white/10 text-white font-bold rounded-lg hover:bg-white/20 transition-all"
                       >
-                        Close
+                        Tutup
                       </button>
                     </div>
                   </motion.div>

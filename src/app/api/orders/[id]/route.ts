@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { query, getConnection } from '@/lib/db';
 import { getServerSession } from "next-auth/next";
-import { authOptions } from "@/lib/auth";
+import { authOptions, adminAuthOptions } from "@/lib/auth";
 import {
   sendEmail,
   paymentVerifiedTemplate,
@@ -14,7 +14,19 @@ export async function GET(
   { params }: { params: Promise<{ id: string }> | { id: string } }
 ) {
   try {
-    const session = await getServerSession(authOptions);
+    let session = await getServerSession(authOptions);
+    let isAdmin = false;
+
+    if (session?.user && (session.user as any).role === 'admin') {
+      isAdmin = true;
+    } else {
+      const adminSession = await getServerSession(adminAuthOptions);
+      if (adminSession?.user && (adminSession.user as any).role === 'admin') {
+        session = adminSession;
+        isAdmin = true;
+      }
+    }
+
     if (!session || !session.user) {
       return NextResponse.json(
         { error: 'Unauthorized. Silakan login terlebih dahulu.' },
@@ -23,8 +35,6 @@ export async function GET(
     }
 
     const userId = (session.user as any).id;
-    const userRole = (session.user as any).role;
-    const isAdmin = userRole === 'admin';
 
     const resolvedParams = await Promise.resolve(params);
     const orderId = resolvedParams.id;
@@ -89,7 +99,7 @@ export async function PUT(
   { params }: { params: Promise<{ id: string }> | { id: string } }
 ) {
   try {
-    const session = await getServerSession(authOptions);
+    const session = await getServerSession(adminAuthOptions);
     if (!session || !session.user) {
       return NextResponse.json(
         { error: 'Unauthorized' },
@@ -324,7 +334,7 @@ export async function DELETE(
   { params }: { params: Promise<{ id: string }> | { id: string } }
 ) {
   try {
-    const session = await getServerSession(authOptions);
+    const session = await getServerSession(adminAuthOptions);
     if (!session || !session.user) {
       return NextResponse.json(
         { error: 'Unauthorized' },
