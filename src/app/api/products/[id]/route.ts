@@ -19,6 +19,38 @@ export async function PUT(
     await connection.beginTransaction();
 
     try {
+      // Validate inputs first
+      if (name !== undefined && (typeof name !== 'string' || name.trim() === '')) {
+        await connection.rollback();
+        return NextResponse.json({ error: 'Nama produk wajib diisi' }, { status: 400 });
+      }
+
+      if (price !== undefined && (typeof price !== 'number' || isNaN(price) || price < 0)) {
+        await connection.rollback();
+        return NextResponse.json({ error: 'Harga tidak boleh bernilai negatif' }, { status: 400 });
+      }
+
+      if (stock !== undefined && (typeof stock !== 'number' || isNaN(stock) || stock < 0)) {
+        await connection.rollback();
+        return NextResponse.json({ error: 'Stok tidak boleh bernilai negatif' }, { status: 400 });
+      }
+
+      if (category_id !== undefined && category_id !== null) {
+        if (typeof category_id !== 'number' || isNaN(category_id) || category_id <= 0) {
+          await connection.rollback();
+          return NextResponse.json({ error: 'Kategori tidak valid' }, { status: 400 });
+        }
+        // Verify category exists
+        const [cats]: any[] = await connection.execute(
+          `SELECT id FROM categories WHERE id = ?`,
+          [category_id]
+        );
+        if (!cats || cats.length === 0) {
+          await connection.rollback();
+          return NextResponse.json({ error: 'Kategori tidak ditemukan' }, { status: 400 });
+        }
+      }
+
       // 1. Fetch old product details for comparison
       const [products]: any[] = await connection.execute(
         `SELECT name, stock FROM products WHERE id = ? FOR UPDATE`,

@@ -73,7 +73,21 @@ export default function AdminPage() {
   const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
 
   // Confirm Dialog
-  const [confirmDialog, setConfirmDialog] = useState<{isOpen: boolean, title: string, message: string, onConfirm: () => void}>({isOpen: false, title: '', message: '', onConfirm: () => {}});
+  const [confirmDialog, setConfirmDialog] = useState<{
+    isOpen: boolean;
+    title: string;
+    message: string;
+    confirmText?: string;
+    type?: 'danger' | 'success';
+    onConfirm: () => void;
+  }>({
+    isOpen: false,
+    title: '',
+    message: '',
+    confirmText: 'Ya, Hapus',
+    type: 'danger',
+    onConfirm: () => {}
+  });
 
   // Notifications
   const [toast, setToast] = useState<{message: string, type: 'success'|'error'} | null>(null);
@@ -84,6 +98,7 @@ export default function AdminPage() {
   };
   const [showProductForm, setShowProductForm] = useState(false);
   const [uploadingImage, setUploadingImage] = useState(false);
+  const [savingProduct, setSavingProduct] = useState(false);
   const [productForm, setProductForm] = useState({
     name: '',
     description: '',
@@ -489,23 +504,9 @@ export default function AdminPage() {
     }
   };
 
-  const handleSaveProduct = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!productForm.name || !productForm.price || !productForm.stock) {
-      showToast('Please fill all required fields', 'error');
-      return;
-    }
-
+  const executeSaveProduct = async (payload: any) => {
+    setSavingProduct(true);
     try {
-      const payload = {
-        name: productForm.name,
-        description: productForm.description,
-        price: parseFloat(productForm.price),
-        image_url: productForm.image_url,
-        stock: parseInt(productForm.stock),
-        category_id: productForm.category_id ? parseInt(productForm.category_id) : null,
-      };
-
       if (selectedProduct) {
         const response = await fetch(`/api/products/${selectedProduct.id}`, {
           method: 'PUT',
@@ -513,12 +514,12 @@ export default function AdminPage() {
           body: JSON.stringify(payload),
         });
         if (response.ok) {
-          showToast('Product updated', 'success');
+          showToast('Produk berhasil diperbarui', 'success');
           closeProductForm();
           fetchProducts();
         } else {
           const errorData = await response.json().catch(() => ({}));
-          showToast(errorData.error || 'Failed to update product', 'error');
+          showToast(errorData.error || 'Gagal memperbarui produk', 'error');
         }
       } else {
         const response = await fetch('/api/products/create', {
@@ -527,17 +528,60 @@ export default function AdminPage() {
           body: JSON.stringify(payload),
         });
         if (response.ok) {
-          showToast('Product created', 'success');
+          showToast('Produk berhasil dibuat', 'success');
           closeProductForm();
           fetchProducts();
         } else {
           const errorData = await response.json().catch(() => ({}));
-          showToast(errorData.error || 'Failed to create product', 'error');
+          showToast(errorData.error || 'Gagal membuat produk', 'error');
         }
       }
     } catch (error) {
-      showToast('Failed to save product', 'error');
+      showToast('Terjadi kesalahan jaringan saat menyimpan produk', 'error');
+    } finally {
+      setSavingProduct(false);
     }
+  };
+
+  const handleSaveProduct = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!productForm.name || !productForm.price || productForm.stock === '') {
+      showToast('Silakan isi semua field wajib (*)', 'error');
+      return;
+    }
+
+    const price = parseFloat(productForm.price);
+    const stock = parseInt(productForm.stock);
+
+    if (isNaN(price) || price < 0) {
+      showToast('Harga tidak boleh bernilai negatif', 'error');
+      return;
+    }
+
+    if (isNaN(stock) || stock < 0) {
+      showToast('Stok tidak boleh bernilai negatif', 'error');
+      return;
+    }
+
+    const payload = {
+      name: productForm.name,
+      description: productForm.description,
+      price: price,
+      image_url: productForm.image_url,
+      stock: stock,
+      category_id: productForm.category_id ? parseInt(productForm.category_id) : null,
+    };
+
+    setConfirmDialog({
+      isOpen: true,
+      title: selectedProduct ? 'Simpan Perubahan' : 'Tambah Produk Baru',
+      message: selectedProduct 
+        ? `Apakah Anda yakin ingin memperbarui produk "${productForm.name}"?` 
+        : `Apakah Anda yakin ingin menambahkan produk baru "${productForm.name}"?`,
+      confirmText: 'Ya, Simpan',
+      type: 'success',
+      onConfirm: () => executeSaveProduct(payload)
+    });
   };
 
   const executeDeleteProduct = async (productId: number) => {
@@ -681,7 +725,7 @@ export default function AdminPage() {
               exit={{ opacity: 0, scale: 0.9, y: 20 }}
               className="bg-[#111111] border border-white/10 rounded-2xl p-6 max-w-sm w-full shadow-2xl relative overflow-hidden"
             >
-              <div className="absolute top-0 left-0 w-full h-1 bg-red-500"></div>
+              <div className={`absolute top-0 left-0 w-full h-1 ${confirmDialog.type === 'success' ? 'bg-emerald-500' : 'bg-red-500'}`}></div>
               <h3 className="text-xl font-bold text-white mb-2">{confirmDialog.title}</h3>
               <p className="text-white/70 mb-6">{confirmDialog.message}</p>
               
@@ -697,9 +741,13 @@ export default function AdminPage() {
                     setConfirmDialog(d => ({ ...d, isOpen: false }));
                     confirmDialog.onConfirm();
                   }}
-                  className="px-4 py-2 bg-red-500 text-white font-bold rounded-lg hover:bg-red-600 shadow-[0_0_15px_rgba(239,68,68,0.3)] hover:shadow-[0_0_25px_rgba(239,68,68,0.5)] transition-all cursor-pointer"
+                  className={`px-4 py-2 text-white font-bold rounded-lg transition-all cursor-pointer ${
+                    confirmDialog.type === 'success'
+                      ? 'bg-emerald-500 hover:bg-emerald-600 shadow-[0_0_15px_rgba(16,185,129,0.3)] hover:shadow-[0_0_25px_rgba(16,185,129,0.5)]'
+                      : 'bg-red-500 hover:bg-red-600 shadow-[0_0_15px_rgba(239,68,68,0.3)] hover:shadow-[0_0_25px_rgba(239,68,68,0.5)]'
+                  }`}
                 >
-                  Ya, Hapus
+                  {confirmDialog.confirmText || (confirmDialog.type === 'success' ? 'Ya, Simpan' : 'Ya, Hapus')}
                 </button>
               </div>
             </motion.div>
@@ -1271,7 +1319,8 @@ export default function AdminPage() {
                           name="name"
                           value={productForm.name}
                           onChange={handleProductFormChange}
-                          className="w-full px-4 py-2 bg-white/10 text-white rounded border border-white/20 focus:border-emerald-500 outline-none"
+                          disabled={savingProduct}
+                          className="w-full px-4 py-2 bg-white/10 text-white rounded border border-white/20 focus:border-emerald-500 outline-none disabled:opacity-50"
                           required
                         />
                       </div>
@@ -1281,8 +1330,9 @@ export default function AdminPage() {
                           name="description"
                           value={productForm.description}
                           onChange={handleProductFormChange}
+                          disabled={savingProduct}
                           rows={2}
-                          className="w-full px-4 py-2 bg-white/10 text-white rounded border border-white/20 focus:border-emerald-500 outline-none"
+                          className="w-full px-4 py-2 bg-white/10 text-white rounded border border-white/20 focus:border-emerald-500 outline-none disabled:opacity-50"
                         />
                       </div>
                       <div>
@@ -1291,7 +1341,8 @@ export default function AdminPage() {
                           name="category_id"
                           value={productForm.category_id}
                           onChange={handleProductFormChange}
-                          className="w-full px-4 py-2 bg-white/10 text-white rounded border border-white/20 focus:border-emerald-500 outline-none [&>option]:bg-neutral-900 [&>option]:text-white"
+                          disabled={savingProduct}
+                          className="w-full px-4 py-2 bg-white/10 text-white rounded border border-white/20 focus:border-emerald-500 outline-none disabled:opacity-50 [&>option]:bg-neutral-900 [&>option]:text-white"
                         >
                           <option value="" className="bg-neutral-900 text-white">No Category</option>
                           {categories.map(c => (
@@ -1308,7 +1359,8 @@ export default function AdminPage() {
                           onChange={handleProductFormChange}
                           placeholder="0.00"
                           step="0.01"
-                          className="w-full px-4 py-2 bg-white/10 text-white rounded border border-white/20 focus:border-emerald-500 outline-none"
+                          disabled={savingProduct}
+                          className="w-full px-4 py-2 bg-white/10 text-white rounded border border-white/20 focus:border-emerald-500 outline-none disabled:opacity-50"
                           required
                         />
                       </div>
@@ -1324,7 +1376,7 @@ export default function AdminPage() {
                               />
                             </div>
                           )}
-                          <label className="flex items-center justify-center px-4 py-3 bg-white/10 text-white rounded border-2 border-dashed border-white/20 hover:border-emerald-500 cursor-pointer transition-all">
+                          <label className={`flex items-center justify-center px-4 py-3 bg-white/10 text-white rounded border-2 border-dashed border-white/20 hover:border-emerald-500 cursor-pointer transition-all ${savingProduct ? 'opacity-50 cursor-not-allowed' : ''}`}>
                             <span className="text-sm font-semibold">
                               {uploadingImage ? 'Uploading...' : 'Click to upload image'}
                             </span>
@@ -1332,7 +1384,7 @@ export default function AdminPage() {
                               type="file"
                               accept="image/*"
                               onChange={handleImageUpload}
-                              disabled={uploadingImage}
+                              disabled={uploadingImage || savingProduct}
                               className="hidden"
                             />
                           </label>
@@ -1346,22 +1398,35 @@ export default function AdminPage() {
                           name="stock"
                           value={productForm.stock}
                           onChange={handleProductFormChange}
-                          className="w-full px-4 py-2 bg-white/10 text-white rounded border border-white/20 focus:border-emerald-500 outline-none"
+                          disabled={savingProduct}
+                          className="w-full px-4 py-2 bg-white/10 text-white rounded border border-white/20 focus:border-emerald-500 outline-none disabled:opacity-50"
                           required
                         />
                       </div>
                       <div className="space-y-2">
                         <button
                           type="submit"
-                          className="w-full py-2 bg-emerald-500 text-black font-bold rounded hover:bg-emerald-600 transition-all"
+                          disabled={savingProduct}
+                          className="w-full py-2 bg-emerald-500 text-black font-bold rounded hover:bg-emerald-600 transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
                         >
-                          {selectedProduct ? 'Update' : 'Create'}
+                          {savingProduct ? (
+                            <>
+                              <svg className="animate-spin h-5 w-5 text-black" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                              </svg>
+                              <span>Menyimpan...</span>
+                            </>
+                          ) : (
+                            <span>{selectedProduct ? 'Update' : 'Create'}</span>
+                          )}
                         </button>
                         {selectedProduct && (
                           <button
                             type="button"
                             onClick={() => handleDeleteProduct(selectedProduct.id)}
-                            className="w-full py-2 bg-red-500 text-white font-bold rounded hover:bg-red-600 transition-all"
+                            disabled={savingProduct}
+                            className="w-full py-2 bg-red-500 text-white font-bold rounded hover:bg-red-600 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
                           >
                             Delete
                           </button>
@@ -1369,7 +1434,8 @@ export default function AdminPage() {
                         <button
                           type="button"
                           onClick={closeProductForm}
-                          className="w-full py-2 bg-white/10 text-white font-bold rounded hover:bg-white/20 transition-all"
+                          disabled={savingProduct}
+                          className="w-full py-2 bg-white/10 text-white font-bold rounded hover:bg-white/20 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
                         >
                           Cancel
                         </button>
