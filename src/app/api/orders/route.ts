@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { query } from '@/lib/db';
+import { query, getConnection } from '@/lib/db';
 import { getServerSession } from "next-auth/next";
 import { authOptions } from "@/lib/auth";
 import { sendEmail, orderConfirmationTemplate } from '@/lib/email';
@@ -82,56 +82,86 @@ export async function GET(request: NextRequest) {
 }
 
 export async function POST(request: NextRequest) {
+  const body = await request.json();
+  const { customerName, customerEmail, customerPhone, customerAddress, items, totalPrice, paymentMethod } = body;
+
+  // Validate input
+  if (!customerName || !customerEmail || !items || !totalPrice) {
+    return NextResponse.json(
+      { error: 'Missing required fields' },
+      { status: 400 }
+    );
+  }
+
+  const method = paymentMethod || 'bank_transfer';
+
+  // Fetch session to attach user_id if logged in
+  const session = await getServerSession(authOptions);
+  if (!session || !session.user) {
+    return NextResponse.json(
+      { error: 'Unauthorized. Please login to place an order.' },
+      { status: 401 }
+    );
+  }
+  const userId = (session.user as any).id;
+
+  const connection = await getConnection();
+  await connection.beginTransaction();
+
   try {
-    const body = await request.json();
-    const { customerName, customerEmail, customerPhone, customerAddress, items, totalPrice, paymentMethod } = body;
-
-    // Validate input
-    if (!customerName || !customerEmail || !items || !totalPrice) {
-      return NextResponse.json(
-        { error: 'Missing required fields' },
-        { status: 400 }
-      );
-    }
-
-    const method = paymentMethod || 'bank_transfer';
-
-    // Fetch session to attach user_id if logged in
-    const session = await getServerSession(authOptions);
-    if (!session || !session.user) {
-      return NextResponse.json(
-        { error: 'Unauthorized. Please login to place an order.' },
-        { status: 401 }
-      );
-    }
-    const userId = (session.user as any).id;
-
     // Generate unique order number
     const orderNumber = `TK-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
 
     // Insert order
-    const insertOrderResult = await query(
+    const [insertOrderResult]: any = await connection.execute(
       `INSERT INTO orders (user_id, order_number, customer_name, customer_email, customer_phone, customer_address, subtotal, total_price, status, payment_method, payment_status) 
        VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'pending', ?, 'unpaid')`,
       [userId, orderNumber, customerName, customerEmail, customerPhone, customerAddress, totalPrice, totalPrice, method]
     );
 
-    const orderId = (insertOrderResult as any).insertId;
+    const orderId = insertOrderResult.insertId;
 
-    // Insert order items
+    // Process and validate each item under row lock (FOR UPDATE)
     for (const item of items) {
+      const [products]: any[] = await connection.execute(
+        `SELECT name, stock FROM products WHERE id = ? FOR UPDATE`,
+        [item.productId]
+      );
+
+      if (!products || products.length === 0) {
+        throw new Error(`Produk dengan ID #${item.productId} tidak ditemukan.`);
+      }
+
+      const product = products[0];
+      if (product.stock < item.quantity) {
+        throw new Error(`Stok produk "${product.name}" tidak mencukupi. Tersedia: ${product.stock}, diminta: ${item.quantity}.`);
+      }
+
+      const stockBefore = product.stock;
+      const stockAfter = product.stock - item.quantity;
+
+      // Update product stock
+      await connection.execute(
+        `UPDATE products SET stock = ? WHERE id = ?`,
+        [stockAfter, item.productId]
+      );
+
+      // Insert order items
       const itemSubtotal = item.price * item.quantity;
-      await query(
+      await connection.execute(
         `INSERT INTO order_items (order_id, product_id, quantity, price, subtotal) VALUES (?, ?, ?, ?, ?)`,
         [orderId, item.productId, item.quantity, item.price, itemSubtotal]
       );
 
-      // Update product stock
-      await query(
-        `UPDATE products SET stock = stock - ? WHERE id = ?`,
-        [item.quantity, item.productId]
+      // Insert inventory log
+      await connection.execute(
+        `INSERT INTO inventory_logs (product_id, user_id, order_id, change_type, quantity_changed, stock_before, stock_after, notes)
+         VALUES (?, ?, ?, 'sale', ?, ?, ?, ?)`,
+        [item.productId, userId, orderId, -item.quantity, stockBefore, stockAfter, `Order #${orderId} created by customer`]
       );
     }
+
+    await connection.commit();
 
     // Build email items from what was inserted
     const emailItems = items.map((item: any) => ({
@@ -157,11 +187,14 @@ export async function POST(request: NextRequest) {
       { message: 'Order created successfully', orderId },
       { status: 201 }
     );
-  } catch (error) {
+  } catch (error: any) {
+    await connection.rollback();
     console.error('Error creating order:', error);
     return NextResponse.json(
-      { error: 'Failed to create order' },
-      { status: 500 }
+      { error: error.message || 'Failed to create order' },
+      { status: 400 } // Send 400 Bad Request for stock/validation errors so client can display it
     );
+  } finally {
+    await connection.end();
   }
 }

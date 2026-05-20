@@ -48,6 +48,9 @@ export default function ProductsPage() {
   const [loginPromptMessage, setLoginPromptMessage] = useState('');
   const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' } | null>(null);
   const [addingToCartId, setAddingToCartId] = useState<number | null>(null);
+  const [checkoutChecking, setCheckoutChecking] = useState(false);
+  const [insufficientStockItems, setInsufficientStockItems] = useState<number[]>([]);
+  const [checkoutWarning, setCheckoutWarning] = useState<string | null>(null);
 
   const requireLogin = (message: string) => {
     if (!session) {
@@ -161,17 +164,86 @@ export default function ProductsPage() {
 
   const removeFromCart = (productId: number) => {
     setCart((prevCart) => prevCart.filter((item) => item.productId !== productId));
+    setInsufficientStockItems((prev) => {
+      const updated = prev.filter((id) => id !== productId);
+      if (updated.length === 0) {
+        setCheckoutWarning(null);
+      }
+      return updated;
+    });
   };
 
   const updateQuantity = (productId: number, quantity: number) => {
-    if (quantity <= 0) {
+    const product = products.find((p) => p.id === productId);
+    const maxStock = product ? product.stock : 99;
+    
+    let finalQty = quantity;
+    if (product && quantity > product.stock) {
+      finalQty = product.stock;
+      showToast(`Stok terbatas! Hanya tersedia ${product.stock} pcs untuk ${product.name}.`, "error");
+    }
+
+    if (finalQty <= 0) {
       removeFromCart(productId);
     } else {
       setCart((prevCart) =>
         prevCart.map((item) =>
-          item.productId === productId ? { ...item, quantity } : item
+          item.productId === productId ? { ...item, quantity: finalQty } : item
         )
       );
+
+      // Clear from insufficient stock list if it's now within limits
+      if (product && finalQty <= product.stock) {
+        setInsufficientStockItems((prev) => {
+          const updated = prev.filter((id) => id !== productId);
+          if (updated.length === 0) {
+            setCheckoutWarning(null);
+          }
+          return updated;
+        });
+      }
+    }
+  };
+
+  const handleCheckoutClick = async () => {
+    if (!requireLogin("You need to login to proceed with checkout.")) return;
+    
+    setCheckoutChecking(true);
+    setCheckoutWarning(null);
+    setInsufficientStockItems([]);
+
+    try {
+      const response = await fetch('/api/products');
+      const latestProducts: Product[] = await response.json();
+      
+      if (!Array.isArray(latestProducts)) {
+        throw new Error("Invalid products response");
+      }
+
+      // Update local products state with latest stocks
+      setProducts(latestProducts);
+
+      const insufficientIds: number[] = [];
+      
+      for (const item of cart) {
+        const latestProd = latestProducts.find(p => p.id === item.productId);
+        if (!latestProd || latestProd.stock < item.quantity) {
+          insufficientIds.push(item.productId);
+        }
+      }
+
+      if (insufficientIds.length > 0) {
+        setInsufficientStockItems(insufficientIds);
+        setCheckoutWarning("Beberapa produk memiliki stock yang tidak mencukupi. Silakan kurangi kuantitas atau hapus produk bertanda merah.");
+        showToast("Stok berubah! Beberapa produk di keranjang Anda melebihi stok yang tersedia.", "error");
+      } else {
+        setShowCheckout(true);
+      }
+    } catch (err) {
+      console.error("Error during pre-checkout recheck:", err);
+      showToast("Gagal melakukan pengecekan stok terbaru. Silakan coba lagi.", "error");
+    } finally {
+      setCheckoutChecking(false);
     }
   };
 
@@ -418,37 +490,63 @@ export default function ProductsPage() {
                 ) : (
                   <>
                     <div className="space-y-4 mb-6">
-                      {cart.map((item) => (
-                        <div key={item.productId} className="bg-white/5 rounded p-4">
-                          <div className="flex justify-between items-start mb-2">
-                            <h4 className="font-bold text-sm">{item.name}</h4>
-                            <button
-                              onClick={() => removeFromCart(item.productId)}
-                              className="text-red-500 text-sm hover:text-red-400"
-                            >
-                              ✕
-                            </button>
+                      {cart.map((item) => {
+                        const isInsufficient = insufficientStockItems.includes(item.productId);
+                        const product = products.find(p => p.id === item.productId);
+                        const maxStock = product ? product.stock : 0;
+                        return (
+                          <div 
+                            key={item.productId} 
+                            className={`bg-white/5 rounded p-4 border transition-all duration-300 ${
+                              isInsufficient 
+                                ? 'border-red-500/80 shadow-[0_0_10px_rgba(239,68,68,0.2)]' 
+                                : 'border-white/5'
+                            }`}
+                          >
+                            <div className="flex justify-between items-start mb-2">
+                              <h4 className="font-bold text-sm text-white">{item.name}</h4>
+                              <button
+                                onClick={() => removeFromCart(item.productId)}
+                                className="text-red-500 text-sm hover:text-red-400"
+                              >
+                                ✕
+                              </button>
+                            </div>
+                            {isInsufficient && (
+                              <p className="text-red-400 text-[10px] font-bold mb-2 uppercase tracking-wide">
+                                ⚠️ Stok tidak mencukupi (Tersedia: {maxStock})
+                              </p>
+                            )}
+                            <div className="flex items-center justify-between mb-2">
+                              <span className="text-emerald-500">{formatCurrency(item.price)}</span>
+                              <input
+                                type="number"
+                                min="1"
+                                max={maxStock}
+                                value={item.quantity}
+                                onChange={(e) =>
+                                  updateQuantity(item.productId, parseInt(e.target.value) || 1)
+                                }
+                                className={`w-14 px-2 py-1 bg-white/10 text-white rounded text-center text-sm border focus:outline-none ${
+                                  isInsufficient ? 'border-red-500 text-red-200' : 'border-white/10 focus:border-emerald-500'
+                                }`}
+                              />
+                            </div>
+                            <p className="text-white/50 text-xs">
+                              Subtotal: {formatCurrency(item.price * item.quantity)}
+                            </p>
                           </div>
-                          <div className="flex items-center justify-between mb-2">
-                            <span className="text-emerald-500">{formatCurrency(item.price)}</span>
-                            <input
-                              type="number"
-                              min="1"
-                              value={item.quantity}
-                              onChange={(e) =>
-                                updateQuantity(item.productId, parseInt(e.target.value))
-                              }
-                              className="w-12 px-2 py-1 bg-white/10 text-white rounded text-center text-sm"
-                            />
-                          </div>
-                          <p className="text-white/50 text-xs">
-                            Subtotal: {formatCurrency(item.price * item.quantity)}
-                          </p>
-                        </div>
-                      ))}
+                        );
+                      })}
                     </div>
 
                     <div className="border-t border-white/10 pt-4 mb-4">
+                      {checkoutWarning && (
+                        <div className="bg-red-500/10 border border-red-500/30 text-red-400 text-xs p-3 rounded-lg mb-4">
+                          <p className="font-bold mb-1">⚠️ Stok Kurang</p>
+                          <p className="opacity-90">{checkoutWarning}</p>
+                        </div>
+                      )}
                       <div className="flex justify-between mb-4">
                         <span className="font-bold">Total:</span>
                         <span className="text-emerald-500 font-bold text-xl">
@@ -456,13 +554,18 @@ export default function ProductsPage() {
                         </span>
                       </div>
                       <button
-                        onClick={() => {
-                          if (!requireLogin("You need to login to proceed with checkout.")) return;
-                          setShowCheckout(true);
-                        }}
-                        className="w-full py-3 bg-emerald-500 text-black font-bold rounded-lg hover:bg-emerald-600 transition-all"
+                        onClick={handleCheckoutClick}
+                        disabled={checkoutChecking}
+                        className="w-full py-3 bg-emerald-500 text-black font-bold rounded-lg hover:bg-emerald-600 transition-all flex items-center justify-center gap-2"
                       >
-                        Checkout
+                        {checkoutChecking ? (
+                          <>
+                            <span className="w-5 h-5 border-2 border-black/30 border-t-black rounded-full animate-spin" />
+                            Memeriksa Stok...
+                          </>
+                        ) : (
+                          'Checkout'
+                        )}
                       </button>
                     </div>
                   </>

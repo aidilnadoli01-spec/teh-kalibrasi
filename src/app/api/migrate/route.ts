@@ -45,9 +45,29 @@ export async function GET() {
     await query("UPDATE users SET is_verified = 1 WHERE is_verified = 0");
     console.log('Auto-verified existing users');
 
+    // 5. Create inventory_logs table if it doesn't exist
+    await query(`
+      CREATE TABLE IF NOT EXISTS inventory_logs (
+        id INT PRIMARY KEY AUTO_INCREMENT,
+        product_id INT NOT NULL,
+        user_id INT DEFAULT NULL,
+        order_id INT DEFAULT NULL,
+        change_type ENUM('sale', 'cancellation', 'restock', 'adjustment', 'refund') NOT NULL,
+        quantity_changed INT NOT NULL,
+        stock_before INT NOT NULL,
+        stock_after INT NOT NULL,
+        notes TEXT,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (product_id) REFERENCES products(id) ON DELETE CASCADE,
+        FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE SET NULL,
+        FOREIGN KEY (order_id) REFERENCES orders(id) ON DELETE SET NULL
+      )
+    `);
+    console.log('Created inventory_logs table if not exists');
+
     return NextResponse.json({ 
       success: true, 
-      message: 'Migration completed successfully. Status column and OTP verification columns are ready.' 
+      message: 'Migration completed successfully. Status column, OTP verification columns, and inventory logs table are ready.' 
     });
   } catch (error: any) {
     console.error('Migration error:', error);

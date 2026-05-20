@@ -51,48 +51,122 @@ export async function PUT(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> | { id: string } }
 ) {
-  try {
-    const resolvedParams = await Promise.resolve(params);
-    const orderId = resolvedParams.id;
-    const body = await request.json();
-    const { status, notes, payment_status, bank_name, bank_account_name, bank_account_number, customer_address } = body;
+  const resolvedParams = await Promise.resolve(params);
+  const orderId = resolvedParams.id;
+  const body = await request.json();
+  const { status, notes, payment_status, bank_name, bank_account_name, bank_account_number, customer_address } = body;
 
+  const connection = await getConnection();
+  await connection.beginTransaction();
+
+  try {
+    // 1. Fetch old order details to verify status changes under row lock
+    const [oldOrders]: any[] = await connection.execute(
+      `SELECT status, user_id FROM orders WHERE id = ? FOR UPDATE`,
+      [orderId]
+    );
+
+    if (!oldOrders || oldOrders.length === 0) {
+      await connection.rollback();
+      return NextResponse.json({ error: 'Order not found' }, { status: 404 });
+    }
+
+    const oldOrder = oldOrders[0];
+    const oldStatus = oldOrder.status;
+
+    // 2. Check if status is transitioning to/from cancelled to modify stock
+    if (status && status !== oldStatus) {
+      const validStatuses = ['pending', 'processing', 'ready', 'completed', 'cancelled'];
+      if (!validStatuses.includes(status)) {
+        await connection.rollback();
+        return NextResponse.json({ error: 'Invalid status' }, { status: 400 });
+      }
+
+      const [orderItems]: any[] = await connection.execute(
+        `SELECT product_id, quantity FROM order_items WHERE order_id = ?`,
+        [orderId]
+      );
+
+      if (status === 'cancelled' && oldStatus !== 'cancelled') {
+        // Restoring stock (Order is cancelled)
+        for (const item of orderItems) {
+          const [products]: any[] = await connection.execute(
+            `SELECT name, stock FROM products WHERE id = ? FOR UPDATE`,
+            [item.product_id]
+          );
+
+          if (products && products.length > 0) {
+            const product = products[0];
+            const stockBefore = product.stock;
+            const stockAfter = product.stock + item.quantity;
+
+            await connection.execute(
+              `UPDATE products SET stock = ? WHERE id = ?`,
+              [stockAfter, item.product_id]
+            );
+
+            await connection.execute(
+              `INSERT INTO inventory_logs (product_id, user_id, order_id, change_type, quantity_changed, stock_before, stock_after, notes)
+               VALUES (?, ?, ?, 'cancellation', ?, ?, ?, ?)`,
+              [item.product_id, oldOrder.user_id, orderId, item.quantity, stockBefore, stockAfter, `Order #${orderId} cancelled by admin`]
+            );
+          }
+        }
+      } else if (oldStatus === 'cancelled' && status !== 'cancelled') {
+        // Reducing stock (Re-activating a cancelled order)
+        for (const item of orderItems) {
+          const [products]: any[] = await connection.execute(
+            `SELECT name, stock FROM products WHERE id = ? FOR UPDATE`,
+            [item.product_id]
+          );
+
+          if (!products || products.length === 0) {
+            throw new Error(`Produk dengan ID #${item.product_id} tidak ditemukan.`);
+          }
+
+          const product = products[0];
+          if (product.stock < item.quantity) {
+            throw new Error(`Stok produk "${product.name}" tidak mencukupi untuk mengaktifkan kembali pesanan. Tersedia: ${product.stock}, diminta: ${item.quantity}.`);
+          }
+
+          const stockBefore = product.stock;
+          const stockAfter = product.stock - item.quantity;
+
+          await connection.execute(
+            `UPDATE products SET stock = ? WHERE id = ?`,
+            [stockAfter, item.product_id]
+          );
+
+          await connection.execute(
+            `INSERT INTO inventory_logs (product_id, user_id, order_id, change_type, quantity_changed, stock_before, stock_after, notes)
+             VALUES (?, ?, ?, 'sale', ?, ?, ?, ?)`,
+            [item.product_id, oldOrder.user_id, orderId, -item.quantity, stockBefore, stockAfter, `Order #${orderId} reactivated by admin`]
+          );
+        }
+      }
+    }
+
+    // 3. Construct updates
     const updateFields: string[] = [];
     const updateValues: any[] = [];
 
-    // Update status if provided
     if (status) {
-      const validStatuses = ['pending', 'processing', 'ready', 'completed', 'cancelled'];
-      if (!validStatuses.includes(status)) {
-        return NextResponse.json(
-          { error: 'Invalid status' },
-          { status: 400 }
-        );
-      }
       updateFields.push('status = ?');
       updateValues.push(status);
     }
-
-    // Update payment status if provided
     if (payment_status) {
       const validPaymentStatuses = ['unpaid', 'pending', 'verified'];
       if (!validPaymentStatuses.includes(payment_status)) {
-        return NextResponse.json(
-          { error: 'Invalid payment status' },
-          { status: 400 }
-        );
+        await connection.rollback();
+        return NextResponse.json({ error: 'Invalid payment status' }, { status: 400 });
       }
       updateFields.push('payment_status = ?');
       updateValues.push(payment_status);
     }
-
-    // Update notes if provided
     if (notes !== undefined) {
       updateFields.push('notes = ?');
       updateValues.push(notes);
     }
-
-    // Update bank details if provided
     if (bank_name !== undefined) {
       updateFields.push('bank_name = ?');
       updateValues.push(bank_name);
@@ -110,23 +184,18 @@ export async function PUT(
       updateValues.push(customer_address);
     }
 
-    if (updateFields.length === 0) {
-      return NextResponse.json(
-        { error: 'No fields to update' },
-        { status: 400 }
+    if (updateFields.length > 0) {
+      updateValues.push(orderId);
+      await connection.execute(
+        `UPDATE orders SET ${updateFields.join(', ')} WHERE id = ?`,
+        updateValues
       );
     }
 
-    updateValues.push(orderId);
+    await connection.commit();
 
-    await query(
-      `UPDATE orders SET ${updateFields.join(', ')} WHERE id = ?`,
-      updateValues
-    );
-
-    // ==== Send Email Notifications based on what changed ====
+    // ==== Send Email Notifications based on what changed (Non-blocking) ====
     try {
-      // Fetch full order details for email
       const orderRows: any = await query('SELECT * FROM orders WHERE id = ?', [orderId]);
       if (Array.isArray(orderRows) && orderRows.length > 0) {
         const order = orderRows[0];
@@ -168,18 +237,20 @@ export async function PUT(
     } catch (emailErr) {
       console.error('[Email] Notification error (non-blocking):', emailErr);
     }
-    // =======================================================
 
     return NextResponse.json(
       { message: 'Order updated successfully' },
       { status: 200 }
     );
-  } catch (error) {
+  } catch (error: any) {
+    await connection.rollback();
     console.error('Error updating order:', error);
     return NextResponse.json(
-      { error: 'Failed to update order' },
-      { status: 500 }
+      { error: error.message || 'Failed to update order' },
+      { status: 400 }
     );
+  } finally {
+    await connection.end();
   }
 }
 
@@ -207,26 +278,69 @@ export async function DELETE(
       );
     }
 
-    // Get order items first to restore stock
-    const orderItems = await query(
-      'SELECT product_id, quantity FROM order_items WHERE order_id = ?',
-      [orderId]
-    );
+    const connection = await getConnection();
+    await connection.beginTransaction();
 
-    // Restore product stock
-    if (Array.isArray(orderItems) && orderItems.length > 0) {
-      for (const item of orderItems as any[]) {
-        if (item?.product_id && item?.quantity) {
-          await query(
-            'UPDATE products SET stock = stock + ? WHERE id = ?',
-            [item.quantity, item.product_id]
-          );
+    try {
+      // 1. Fetch order details to check its current status & user_id
+      const [orders]: any[] = await connection.execute(
+        `SELECT status, user_id FROM orders WHERE id = ? FOR UPDATE`,
+        [orderId]
+      );
+
+      if (!orders || orders.length === 0) {
+        await connection.rollback();
+        return NextResponse.json({ error: 'Order not found' }, { status: 404 });
+      }
+
+      const order = orders[0];
+
+      // 2. Restore stock ONLY if order status is NOT 'cancelled'
+      if (order.status !== 'cancelled') {
+        const [orderItems]: any[] = await connection.execute(
+          'SELECT product_id, quantity FROM order_items WHERE order_id = ?',
+          [orderId]
+        );
+
+        if (orderItems && orderItems.length > 0) {
+          for (const item of orderItems) {
+            const [products]: any[] = await connection.execute(
+              `SELECT name, stock FROM products WHERE id = ? FOR UPDATE`,
+              [item.product_id]
+            );
+
+            if (products && products.length > 0) {
+              const product = products[0];
+              const stockBefore = product.stock;
+              const stockAfter = product.stock + item.quantity;
+
+              // Restore stock
+              await connection.execute(
+                `UPDATE products SET stock = ? WHERE id = ?`,
+                [stockAfter, item.product_id]
+              );
+
+              // Log inventory change
+              await connection.execute(
+                `INSERT INTO inventory_logs (product_id, user_id, order_id, change_type, quantity_changed, stock_before, stock_after, notes)
+                 VALUES (?, ?, ?, 'cancellation', ?, ?, ?, ?)`,
+                [item.product_id, order.user_id, orderId, item.quantity, stockBefore, stockAfter, `Stock restored due to Order #${orderId} deletion`]
+              );
+            }
+          }
         }
       }
-    }
 
-    // Delete order (cascade will delete order_items)
-    await query('DELETE FROM orders WHERE id = ?', [orderId]);
+      // 3. Delete order (cascade will delete order_items)
+      await connection.execute('DELETE FROM orders WHERE id = ?', [orderId]);
+
+      await connection.commit();
+    } catch (txErr: any) {
+      await connection.rollback();
+      throw txErr;
+    } finally {
+      await connection.end();
+    }
 
     // Reset auto-increment if all orders are deleted
     const remainingOrders = await query('SELECT COUNT(*) as count FROM orders') as any[];
@@ -244,10 +358,10 @@ export async function DELETE(
       { message: 'Order deleted successfully' },
       { status: 200 }
     );
-  } catch (error) {
+  } catch (error: any) {
     console.error('Error deleting order:', error);
     return NextResponse.json(
-      { error: 'Failed to delete order' },
+      { error: error.message || 'Failed to delete order' },
       { status: 500 }
     );
   }

@@ -47,7 +47,7 @@ export default function AdminPage() {
   const { data: session, status } = useSession();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  const [activeTab, setActiveTab] = useState<'orders' | 'products' | 'categories' | 'analytics' | 'customers'>('orders');
+  const [activeTab, setActiveTab] = useState<'orders' | 'products' | 'categories' | 'analytics' | 'customers' | 'logs'>('orders');
   
   // Orders
   const [orders, setOrders] = useState<Order[]>([]);
@@ -62,6 +62,10 @@ export default function AdminPage() {
 
   // Customers
   const [customers, setCustomers] = useState<any[]>([]);
+
+  // Inventory Logs
+  const [inventoryLogs, setInventoryLogs] = useState<any[]>([]);
+  const [loadingLogs, setLoadingLogs] = useState(false);
 
   // Products
   const [products, setProducts] = useState<Product[]>([]);
@@ -108,6 +112,7 @@ export default function AdminPage() {
       fetchProducts();
       fetchCategories();
       fetchCustomers();
+      fetchInventoryLogs();
     }
   }, [status, session]);
 
@@ -306,6 +311,26 @@ export default function AdminPage() {
       console.error('Error fetching customers:', error);
     }
   };
+
+  const fetchInventoryLogs = async () => {
+    setLoadingLogs(true);
+    try {
+      const response = await fetch('/api/admin/inventory-logs');
+      const data = await response.json();
+      setInventoryLogs(Array.isArray(data) ? data : []);
+    } catch (error) {
+      console.error('Error fetching inventory logs:', error);
+      setInventoryLogs([]);
+    } finally {
+      setLoadingLogs(false);
+    }
+  };
+
+  useEffect(() => {
+    if (status === 'authenticated' && (session?.user as any)?.role === 'admin' && activeTab === 'logs') {
+      fetchInventoryLogs();
+    }
+  }, [activeTab, status, session]);
 
   const fetchCategories = async () => {
     try {
@@ -703,6 +728,46 @@ export default function AdminPage() {
             </button>
           </div>
 
+          {/* Low Stock Alerts Banner */}
+          {(() => {
+            const lowStockProducts = products.filter(p => p.stock <= 3);
+            if (lowStockProducts.length === 0) return null;
+            return (
+              <motion.div
+                initial={{ opacity: 0, y: -10 }}
+                animate={{ opacity: 1, y: 0 }}
+                className="bg-amber-500/10 border border-amber-500/30 rounded-xl p-4 mb-8 flex flex-col md:flex-row justify-between items-start md:items-center gap-4"
+              >
+                <div className="flex items-center gap-3">
+                  <span className="text-2xl">⚠️</span>
+                  <div>
+                    <h3 className="font-bold text-amber-500">Pemberitahuan Stok Menipis/Habis!</h3>
+                    <p className="text-xs text-white/70">
+                      Ada {lowStockProducts.length} produk yang stoknya hampir habis atau habis. Segera lakukan restok produk berikut.
+                    </p>
+                  </div>
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  {lowStockProducts.slice(0, 3).map(p => (
+                    <span
+                      key={p.id}
+                      className={`px-3 py-1 rounded-full text-xs font-bold ${
+                        p.stock === 0 ? 'bg-red-500/20 text-red-400 border border-red-500/30' : 'bg-amber-500/20 text-amber-400 border border-amber-500/30'
+                      }`}
+                    >
+                      {p.name} ({p.stock === 0 ? 'Habis' : `Sisa ${p.stock}`})
+                    </span>
+                  ))}
+                  {lowStockProducts.length > 3 && (
+                    <span className="px-3 py-1 bg-white/10 rounded-full text-xs font-bold text-white/60">
+                      +{lowStockProducts.length - 3} lainnya
+                    </span>
+                  )}
+                </div>
+              </motion.div>
+            );
+          })()}
+
           {/* Tabs */}
           <div className="flex gap-4 mb-8 border-b border-white/10 overflow-x-auto whitespace-nowrap pb-2 scrollbar-none">
             <button
@@ -754,6 +819,16 @@ export default function AdminPage() {
               }`}
             >
               Analytics
+            </button>
+            <button
+              onClick={() => setActiveTab('logs')}
+              className={`px-6 py-3 font-bold transition-all ${
+                activeTab === 'logs'
+                  ? 'border-b-2 border-emerald-500 text-emerald-500'
+                  : 'text-white/60 hover:text-white'
+              }`}
+            >
+              Inventory Logs
             </button>
           </div>
 
@@ -1141,15 +1216,19 @@ export default function AdminPage() {
                                 {formatCurrency(parseFloat(String(product.price)))}
                               </td>
                               <td className="py-3 px-4">
-                                <span
-                                  className={`px-3 py-1 rounded-full text-xs font-bold ${
-                                    product.stock > 0
-                                      ? 'bg-green-500/20 text-green-500'
-                                      : 'bg-red-500/20 text-red-500'
-                                  }`}
-                                >
-                                  {product.stock}
-                                </span>
+                                {product.stock === 0 ? (
+                                  <span className="px-3 py-1 rounded-full text-xs font-bold bg-red-500/20 text-red-400 border border-red-500/30">
+                                    Out of Stock
+                                  </span>
+                                ) : product.stock <= 3 ? (
+                                  <span className="px-3 py-1 rounded-full text-xs font-bold bg-amber-500/20 text-amber-400 border border-amber-500/30">
+                                    Sisa {product.stock} lagi!
+                                  </span>
+                                ) : (
+                                  <span className="px-3 py-1 rounded-full text-xs font-bold bg-emerald-500/20 text-emerald-400 border border-emerald-500/30">
+                                    {product.stock} pcs
+                                  </span>
+                                )}
                               </td>
                               <td className="py-3 px-4">
                                 <button
@@ -1556,6 +1635,97 @@ export default function AdminPage() {
               </div>
 
               <SalesChart />
+            </motion.div>
+          )}
+
+          {/* INVENTORY LOGS TAB */}
+          {activeTab === 'logs' && (
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              className="bg-white/5 rounded-lg p-6"
+            >
+              <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-6 gap-4">
+                <div>
+                  <h2 className="text-2xl font-bold">Inventory Logs</h2>
+                  <p className="text-sm text-white/50 mt-1">
+                    Riwayat pergerakan stok, restock manual, penjualan, dan pembatalan pesanan.
+                  </p>
+                </div>
+                <button
+                  onClick={fetchInventoryLogs}
+                  className="px-4 py-2 bg-emerald-500 text-black font-bold rounded hover:bg-emerald-600 transition-all cursor-pointer"
+                >
+                  Refresh Logs
+                </button>
+              </div>
+
+              {loadingLogs ? (
+                <p className="text-white/60">Loading logs...</p>
+              ) : !inventoryLogs || inventoryLogs.length === 0 ? (
+                <p className="text-white/60 text-center py-8">Belum ada riwayat log pergerakan stok.</p>
+              ) : (
+                <div className="space-y-4 overflow-x-auto">
+                  <table className="w-full text-sm whitespace-nowrap">
+                    <thead>
+                      <tr className="border-b border-white/10 text-left">
+                        <th className="py-3 px-4 text-white/50 font-medium">Waktu</th>
+                        <th className="py-3 px-4 text-white/50 font-medium">Produk</th>
+                        <th className="py-3 px-4 text-white/50 font-medium">Tipe Perubahan</th>
+                        <th className="py-3 px-4 text-white/50 font-medium text-center">Jumlah</th>
+                        <th className="py-3 px-4 text-white/50 font-medium text-center">Stok Sebelum</th>
+                        <th className="py-3 px-4 text-white/50 font-medium text-center">Stok Sesudah</th>
+                        <th className="py-3 px-4 text-white/50 font-medium">Oleh / Catatan</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {inventoryLogs.map((log) => {
+                        let badgeColor = 'bg-white/10 text-white';
+                        let changeText = '';
+                        if (log.change_type === 'sale') {
+                          badgeColor = 'bg-blue-500/20 text-blue-400 border border-blue-500/30';
+                          changeText = 'Penjualan';
+                        } else if (log.change_type === 'cancellation') {
+                          badgeColor = 'bg-red-500/20 text-red-400 border border-red-500/30';
+                          changeText = 'Pembatalan';
+                        } else if (log.change_type === 'restock') {
+                          badgeColor = 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30';
+                          changeText = 'Restock';
+                        } else if (log.change_type === 'adjustment') {
+                          badgeColor = 'bg-amber-500/20 text-amber-400 border border-amber-500/30';
+                          changeText = 'Penyesuaian';
+                        } else if (log.change_type === 'refund') {
+                          badgeColor = 'bg-purple-500/20 text-purple-400 border border-purple-500/30';
+                          changeText = 'Refund';
+                        }
+
+                        return (
+                          <tr key={log.id} className="border-b border-white/5 hover:bg-white/5 transition-colors">
+                            <td className="py-3 px-4 text-white/50 text-xs">
+                              {new Date(log.created_at).toLocaleString()}
+                            </td>
+                            <td className="py-3 px-4 font-bold">{log.product_name || `Produk #${log.product_id}`}</td>
+                            <td className="py-3 px-4">
+                              <span className={`px-2.5 py-0.5 rounded text-xs font-bold uppercase ${badgeColor}`}>
+                                {changeText}
+                              </span>
+                            </td>
+                            <td className={`py-3 px-4 text-center font-bold ${log.quantity_changed > 0 ? 'text-emerald-400' : 'text-red-400'}`}>
+                              {log.quantity_changed > 0 ? `+${log.quantity_changed}` : log.quantity_changed}
+                            </td>
+                            <td className="py-3 px-4 text-center text-white/60">{log.stock_before}</td>
+                            <td className="py-3 px-4 text-center font-bold text-white">{log.stock_after}</td>
+                            <td className="py-3 px-4 text-xs whitespace-normal max-w-xs">
+                              <span className="text-white/80 font-semibold">{log.user_name ? `${log.user_name} | ` : ''}</span>
+                              <span className="text-white/60 italic">{log.notes || '-'}</span>
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              )}
             </motion.div>
           )}
         </div>
