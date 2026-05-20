@@ -1225,6 +1225,7 @@ export default function AdminPage() {
                             <th className="text-left py-3 px-4">ID</th>
                             <th className="text-left py-3 px-4">Customer</th>
                             <th className="text-left py-3 px-4">Total</th>
+                            <th className="text-left py-3 px-4">Payment</th>
                             <th className="text-left py-3 px-4">Status</th>
                             <th className="text-left py-3 px-4">Date</th>
                             <th className="text-left py-3 px-4">Action</th>
@@ -1240,6 +1241,20 @@ export default function AdminPage() {
                               </td>
                               <td className="py-3 px-4 font-bold text-emerald-500">
                                 {formatCurrency(parseFloat(String(order.total_price)))}
+                              </td>
+                              <td className="py-3 px-4">
+                                <span
+                                  className={`px-3 py-1 rounded-full text-xs font-bold ${
+                                    order.payment_status === 'verified'
+                                      ? 'bg-green-500/20 text-green-500'
+                                      : order.payment_status === 'pending'
+                                      ? 'bg-yellow-500/20 text-yellow-500'
+                                      : 'bg-red-500/20 text-red-500'
+                                  }`}
+                                >
+                                  {order.payment_status === 'verified' ? 'Verified' :
+                                   order.payment_status === 'pending' ? 'Pending' : 'Unpaid'}
+                                </span>
                               </td>
                               <td className="py-3 px-4">
                                 <span

@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { query, getConnection } from '@/lib/db';
 import { getServerSession } from "next-auth/next";
-import { authOptions } from "@/lib/auth";
+import { authOptions, adminAuthOptions } from "@/lib/auth";
 import { sendEmail, orderConfirmationTemplate } from '@/lib/email';
 
 async function attachPaymentDetails(order: any) {
@@ -32,7 +32,19 @@ async function attachPaymentDetails(order: any) {
 
 export async function GET(request: NextRequest) {
   try {
-    const session = await getServerSession(authOptions);
+    let session = await getServerSession(authOptions);
+    let isAdmin = false;
+
+    if (session?.user && (session.user as any).role === 'admin') {
+      isAdmin = true;
+    } else {
+      const adminSession = await getServerSession(adminAuthOptions);
+      if (adminSession?.user && (adminSession.user as any).role === 'admin') {
+        session = adminSession;
+        isAdmin = true;
+      }
+    }
+
     if (!session || !session.user) {
       return NextResponse.json(
         { error: 'Unauthorized. Silakan login terlebih dahulu.' },
@@ -41,8 +53,6 @@ export async function GET(request: NextRequest) {
     }
 
     const userId = (session.user as any).id;
-    const userRole = (session.user as any).role;
-    const isAdmin = userRole === 'admin';
 
     const searchParams = request.nextUrl.searchParams;
     const searchValue = searchParams.get('search');
