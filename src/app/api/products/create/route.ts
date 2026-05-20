@@ -9,7 +9,7 @@ export async function POST(request: NextRequest) {
 
   try {
     const session = await getServerSession(adminAuthOptions);
-    const userId = session?.user ? (session.user as any).id : null;
+    const userId = session?.user ? ((session.user as any).id || null) : null;
 
     const body = await request.json();
     const { name, description, price, image_url, stock, category_id } = body;

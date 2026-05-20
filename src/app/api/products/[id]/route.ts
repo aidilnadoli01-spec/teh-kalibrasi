@@ -13,7 +13,7 @@ export async function PUT(
     const { name, description, price, image_url, stock, category_id } = body;
 
     const session = await getServerSession(adminAuthOptions);
-    const userId = session?.user ? (session.user as any).id : null;
+    const userId = session?.user ? ((session.user as any).id || null) : null;
 
     const connection = await getConnection();
     await connection.beginTransaction();

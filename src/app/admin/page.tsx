@@ -516,6 +516,9 @@ export default function AdminPage() {
           showToast('Product updated', 'success');
           closeProductForm();
           fetchProducts();
+        } else {
+          const errorData = await response.json().catch(() => ({}));
+          showToast(errorData.error || 'Failed to update product', 'error');
         }
       } else {
         const response = await fetch('/api/products/create', {
@@ -527,6 +530,9 @@ export default function AdminPage() {
           showToast('Product created', 'success');
           closeProductForm();
           fetchProducts();
+        } else {
+          const errorData = await response.json().catch(() => ({}));
+          showToast(errorData.error || 'Failed to create product', 'error');
         }
       }
     } catch (error) {
