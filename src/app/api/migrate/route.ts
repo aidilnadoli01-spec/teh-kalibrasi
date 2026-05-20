@@ -6,8 +6,6 @@ export async function GET() {
     console.log('Starting migration...');
     
     // 1. Check if we need to update orders.status column
-    // We'll just try to run the ALTER TABLE. If it's already VARCHAR or has the values, it might just work or we catch the error.
-    // To be safe, we'll change it to VARCHAR(50) first to remove ENUM restrictions if any.
     await query("ALTER TABLE orders MODIFY COLUMN status VARCHAR(50) DEFAULT 'pending'");
     console.log('Modified status column to VARCHAR');
 
@@ -16,12 +14,40 @@ export async function GET() {
     await query("UPDATE orders SET status = 'completed' WHERE status = 'delivered'");
     console.log('Migrated old status values');
 
-    // 3. (Optional) Change it back to ENUM if preferred, but VARCHAR is safer for now
-    // await query("ALTER TABLE orders MODIFY COLUMN status ENUM('pending', 'processing', 'ready', 'completed', 'cancelled') DEFAULT 'pending'");
+    // 3. Alter users table to add OTP & verification fields if not exists
+    const columns: any = await query(
+      "SELECT COLUMN_NAME FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'users'"
+    );
+    const columnNames = columns.map((c: any) => c.COLUMN_NAME.toLowerCase());
+    
+    if (!columnNames.includes('otp_code')) {
+      await query("ALTER TABLE users ADD COLUMN otp_code VARCHAR(255) DEFAULT NULL");
+      console.log('Added otp_code column');
+    }
+    if (!columnNames.includes('otp_expired_at')) {
+      await query("ALTER TABLE users ADD COLUMN otp_expired_at DATETIME DEFAULT NULL");
+      console.log('Added otp_expired_at column');
+    }
+    if (!columnNames.includes('otp_attempt')) {
+      await query("ALTER TABLE users ADD COLUMN otp_attempt INT DEFAULT 0");
+      console.log('Added otp_attempt column');
+    }
+    if (!columnNames.includes('is_verified')) {
+      await query("ALTER TABLE users ADD COLUMN is_verified TINYINT(1) DEFAULT 0");
+      console.log('Added is_verified column');
+    }
+    if (!columnNames.includes('email_verified_at')) {
+      await query("ALTER TABLE users ADD COLUMN email_verified_at DATETIME DEFAULT NULL");
+      console.log('Added email_verified_at column');
+    }
+
+    // 4. Backward compatibility: verify existing users
+    await query("UPDATE users SET is_verified = 1 WHERE is_verified = 0");
+    console.log('Auto-verified existing users');
 
     return NextResponse.json({ 
       success: true, 
-      message: 'Migration completed successfully. Status column is now VARCHAR and old values are mapped.' 
+      message: 'Migration completed successfully. Status column and OTP verification columns are ready.' 
     });
   } catch (error: any) {
     console.error('Migration error:', error);

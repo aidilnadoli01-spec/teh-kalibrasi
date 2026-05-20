@@ -34,7 +34,7 @@ export default function RegisterPage() {
         throw new Error(data.error || 'Registration failed');
       }
 
-      router.push('/login');
+      router.push(`/otp-verification?email=${encodeURIComponent(formData.email)}`);
     } catch (err: any) {
       setError(err.message);
       setLoading(false);

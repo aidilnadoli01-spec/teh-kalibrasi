@@ -40,7 +40,9 @@ export default function LoginPage() {
 
     if (res?.error) {
       // Tampilkan pesan error yang informatif
-      if (res.error.includes('admin accounts must use')) {
+      if (res.error.includes('EMAIL_UNVERIFIED')) {
+        router.push(`/otp-verification?email=${encodeURIComponent(email)}`);
+      } else if (res.error.includes('admin accounts must use')) {
         setError('Akun admin harus login melalui portal admin (/admin).');
       } else {
         setError('Email atau password salah.');

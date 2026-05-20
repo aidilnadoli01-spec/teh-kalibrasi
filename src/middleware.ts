@@ -59,6 +59,13 @@ export async function middleware(request: NextRequest) {
     if (userToken.role === 'admin') {
       return NextResponse.redirect(new URL('/admin', request.url));
     }
+
+    // Jika belum diverifikasi OTP → arahkan ke halaman verifikasi OTP
+    if (userToken.is_verified === 0 || userToken.is_verified === false) {
+      return NextResponse.redirect(
+        new URL(`/otp-verification?email=${encodeURIComponent(userToken.email || '')}`, request.url)
+      );
+    }
   }
 
   return NextResponse.next();

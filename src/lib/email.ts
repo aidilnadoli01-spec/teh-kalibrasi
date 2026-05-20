@@ -174,6 +174,23 @@ export function orderCompletedTemplate(order: {
   `);
 }
 
+// ---- OTP Verification Email ----
+export function otpVerificationTemplate(otp: string) {
+  return baseTemplate(`
+    <div class="card">
+      <span class="badge badge-green">✓ Verifikasi Akun</span>
+      <h2 style="margin-top:16px;">Kode Verifikasi OTP Anda</h2>
+      <p>Terima kasih telah mendaftar di <strong>Tehkalibrasi</strong>. Gunakan kode OTP di bawah ini untuk memverifikasi alamat email Anda dan mengaktifkan akun Anda:</p>
+    </div>
+    <div class="card" style="text-align:center;">
+      <div style="font-size: 36px; font-weight: 800; letter-spacing: 6px; color: #10b981; margin: 20px 0; background: rgba(16,185,129,0.05); padding: 15px; border-radius: 8px; border: 1px dashed rgba(16,185,129,0.3); display: inline-block;">
+        ${otp}
+      </div>
+      <p style="font-size: 13px; color: #6b7280; margin-top: 10px;">Kode OTP ini berlaku selama <strong>5 menit</strong>. Jangan bagikan kode ini kepada siapa pun.</p>
+    </div>
+  `);
+}
+
 // =======================
 // Send Email Helper
 // =======================

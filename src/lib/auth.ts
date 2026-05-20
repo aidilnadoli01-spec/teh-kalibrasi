@@ -37,6 +37,11 @@ export const userAuthOptions: NextAuthOptions = {
           throw new Error("Access denied: admin accounts must use the admin login portal");
         }
 
+        // ✅ Validasi verifikasi email OTP
+        if (user.is_verified === 0 || user.is_verified === false) {
+          throw new Error("EMAIL_UNVERIFIED");
+        }
+
         const isPasswordMatch = await bcrypt.compare(
           credentials.password,
           user.password_hash
@@ -51,6 +56,7 @@ export const userAuthOptions: NextAuthOptions = {
           name: user.name,
           email: user.email,
           role: "customer",
+          is_verified: user.is_verified,
         };
       },
     }),
@@ -63,6 +69,7 @@ export const userAuthOptions: NextAuthOptions = {
       if (user) {
         token.id = user.id;
         token.role = (user as any).role;
+        token.is_verified = (user as any).is_verified;
       }
       return token;
     },
@@ -70,6 +77,7 @@ export const userAuthOptions: NextAuthOptions = {
       if (token && session.user) {
         (session.user as any).id = token.id;
         (session.user as any).role = token.role;
+        (session.user as any).is_verified = token.is_verified;
       }
       return session;
     },
