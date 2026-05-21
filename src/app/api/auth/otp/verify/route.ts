@@ -9,18 +9,19 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Email dan kode OTP wajib diisi' }, { status: 400 });
     }
 
-    // Get user
+    // Get user from main users table first to see if already verified
     const users: any = await query('SELECT * FROM users WHERE email = ?', [email]);
-    if (!users || users.length === 0) {
+    if (users && users.length > 0) {
+      return NextResponse.json({ message: 'Email sudah terverifikasi sebelumnya. Silakan login.' });
+    }
+
+    // Get user from pending_users table
+    const pending: any = await query('SELECT * FROM pending_users WHERE email = ?', [email]);
+    if (!pending || pending.length === 0) {
       return NextResponse.json({ error: 'Pengguna tidak ditemukan' }, { status: 404 });
     }
 
-    const user = users[0];
-
-    // If already verified
-    if (user.is_verified === 1) {
-      return NextResponse.json({ message: 'Email sudah terverifikasi sebelumnya. Silakan login.' });
-    }
+    const user = pending[0];
 
     // Check attempts limit (max 5)
     if (user.otp_attempt >= 5) {
@@ -33,7 +34,7 @@ export async function POST(request: NextRequest) {
     // Check if OTP matches
     if (user.otp_code !== otp) {
       // Increment attempt counter
-      await query('UPDATE users SET otp_attempt = otp_attempt + 1 WHERE email = ?', [email]);
+      await query('UPDATE pending_users SET otp_attempt = otp_attempt + 1 WHERE email = ?', [email]);
       const remaining = 5 - (user.otp_attempt + 1);
       
       let errorMsg = 'Kode OTP yang Anda masukkan salah.';
@@ -56,12 +57,17 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Verify user
+    // Verify user: insert into users and delete from pending_users
     const nowStr = now.toISOString().slice(0, 19).replace('T', ' ');
+    
+    // Insert into users
     await query(
-      'UPDATE users SET is_verified = 1, email_verified_at = ?, otp_code = NULL, otp_expired_at = NULL, otp_attempt = 0 WHERE email = ?',
-      [nowStr, email]
+      'INSERT INTO users (name, email, password_hash, role, is_verified, email_verified_at) VALUES (?, ?, ?, \'customer\', 1, ?)',
+      [user.name, user.email, user.password_hash, nowStr]
     );
+
+    // Delete from pending_users
+    await query('DELETE FROM pending_users WHERE email = ?', [email]);
 
     return NextResponse.json({
       success: true,

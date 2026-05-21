@@ -10,18 +10,19 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Email wajib diisi' }, { status: 400 });
     }
 
-    // Get user
+    // Get user from main users table first to see if already verified
     const users: any = await query('SELECT * FROM users WHERE email = ?', [email]);
-    if (!users || users.length === 0) {
+    if (users && users.length > 0) {
+      return NextResponse.json({ message: 'Email sudah terverifikasi. Silakan login.' });
+    }
+
+    // Get user from pending_users table
+    const pending: any = await query('SELECT * FROM pending_users WHERE email = ?', [email]);
+    if (!pending || pending.length === 0) {
       return NextResponse.json({ error: 'Pengguna tidak ditemukan' }, { status: 404 });
     }
 
-    const user = users[0];
-
-    // If already verified
-    if (user.is_verified === 1) {
-      return NextResponse.json({ message: 'Email sudah terverifikasi. Silakan login.' });
-    }
+    const user = pending[0];
 
     const now = new Date();
 
@@ -46,11 +47,19 @@ export async function POST(request: NextRequest) {
     // Generate new OTP and expiry (5 minutes)
     const newOtp = Math.floor(100000 + Math.random() * 900000).toString();
     const newExpiry = new Date(Date.now() + 5 * 60 * 1000);
-    const newExpiryStr = newExpiry.toISOString().slice(0, 19).replace('T', ' ');
+    const toMysqlDateTime = (date: Date) => {
+      return date.getFullYear() + '-' +
+        String(date.getMonth() + 1).padStart(2, '0') + '-' +
+        String(date.getDate()).padStart(2, '0') + ' ' +
+        String(date.getHours()).padStart(2, '0') + ':' +
+        String(date.getMinutes()).padStart(2, '0') + ':' +
+        String(date.getSeconds()).padStart(2, '0');
+    };
+    const newExpiryStr = toMysqlDateTime(newExpiry);
 
-    // Update database
+    // Update pending_users database
     await query(
-      'UPDATE users SET otp_code = ?, otp_expired_at = ?, otp_attempt = 0 WHERE email = ?',
+      'UPDATE pending_users SET otp_code = ?, otp_expired_at = ?, otp_attempt = 0 WHERE email = ?',
       [newOtp, newExpiryStr, email]
     );
 

@@ -125,9 +125,25 @@ export async function GET() {
       console.log('Seeded default payment methods');
     }
 
+    // 9. Create pending_users table if it doesn't exist
+    await query(`
+      CREATE TABLE IF NOT EXISTS pending_users (
+        id INT PRIMARY KEY AUTO_INCREMENT,
+        name VARCHAR(255) NOT NULL,
+        email VARCHAR(255) NOT NULL UNIQUE,
+        password_hash VARCHAR(255) NOT NULL,
+        otp_code VARCHAR(255) DEFAULT NULL,
+        otp_expired_at DATETIME DEFAULT NULL,
+        otp_attempt INT DEFAULT 0,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+      )
+    `);
+    console.log('Created pending_users table if not exists');
+
     return NextResponse.json({ 
       success: true, 
-      message: 'Migration completed successfully. Status column, OTP columns, inventory logs, and payment systems are ready.' 
+      message: 'Migration completed successfully. Status column, OTP columns, inventory logs, payment systems, and pending users table are ready.' 
     });
   } catch (error: any) {
     console.error('Migration error:', error);

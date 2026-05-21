@@ -27,6 +27,22 @@ export const userAuthOptions: NextAuthOptions = {
         );
 
         if (!users || users.length === 0) {
+          // Check if user exists in pending_users table (registration completed but OTP not yet verified)
+          const pending: any = await query(
+            "SELECT * FROM pending_users WHERE email = ?",
+            [credentials.email]
+          );
+
+          if (pending && pending.length > 0) {
+            const pendingUser = pending[0];
+            const isPasswordMatch = await bcrypt.compare(
+              credentials.password,
+              pendingUser.password_hash
+            );
+            if (isPasswordMatch) {
+              throw new Error("EMAIL_UNVERIFIED");
+            }
+          }
           throw new Error("Invalid email or password");
         }
 
