@@ -51,18 +51,25 @@ export async function PUT(
     const { id: userId } = await params;
     const { name, email, password, role } = await request.json();
 
-    if (!name || !email || !role) {
+    if (!name || !role) {
       return NextResponse.json({ error: 'Missing required fields' }, { status: 400 });
     }
 
-    // Check if email is already taken by another user
-    const existingUser: any = await query('SELECT id FROM users WHERE email = ? AND id != ?', [email, userId]);
-    if (existingUser && existingUser.length > 0) {
-      return NextResponse.json({ error: 'Email already taken by another user' }, { status: 400 });
+    // Ambil data user lama dari database untuk memvalidasi email tidak berubah
+    const existingUsers: any = await query('SELECT email FROM users WHERE id = ?', [userId]);
+    if (!existingUsers || existingUsers.length === 0) {
+      return NextResponse.json({ error: 'User tidak ditemukan' }, { status: 404 });
+    }
+    const existingUser = existingUsers[0];
+
+    // Validasi backend utama: email tidak boleh diubah
+    if (email && email !== existingUser.email) {
+      return NextResponse.json({ error: 'Email tidak dapat diubah setelah akun dibuat' }, { status: 400 });
     }
 
-    let sql = 'UPDATE users SET name = ?, email = ?, role = ?';
-    let values = [name, email, role];
+    // Update query hanya menyertakan name dan role, tanpa kolom email sama sekali demi keamanan tambahan
+    let sql = 'UPDATE users SET name = ?, role = ?';
+    let values = [name, role];
 
     if (password) {
       const bcrypt = require('bcryptjs');

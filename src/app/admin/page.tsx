@@ -1784,8 +1784,19 @@ export default function AdminPage() {
                           required
                           value={userForm.email}
                           onChange={e => setUserForm({...userForm, email: e.target.value})}
-                          className="w-full px-4 py-2 bg-white/10 border border-white/20 rounded focus:border-emerald-500 outline-none text-white"
+                          disabled={!!selectedUser}
+                          className={`w-full px-4 py-2 border rounded outline-none text-white transition-all ${
+                            selectedUser 
+                              ? 'bg-neutral-900/50 border-white/10 text-white/50 cursor-not-allowed select-none' 
+                              : 'bg-white/10 border border-white/20 focus:border-emerald-500'
+                          }`}
                         />
+                        {selectedUser && (
+                          <p className="text-xs text-yellow-500 mt-1.5 flex items-center gap-1.5 font-medium">
+                            <span className="inline-block w-1.5 h-1.5 rounded-full bg-yellow-500 animate-pulse"></span>
+                            Email tidak dapat diubah setelah akun dibuat
+                          </p>
+                        )}
                       </div>
                       <div>
                         <label className="block text-white/60 text-sm mb-1">
