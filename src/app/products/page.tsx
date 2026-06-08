@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { useSession } from 'next-auth/react';
 import { motion, AnimatePresence } from 'framer-motion';
 import Navbar from '@/components/Navbar';
@@ -37,6 +37,8 @@ export default function ProductsPage() {
   const [categories, setCategories] = useState<Category[]>([]);
   const [activeCategory, setActiveCategory] = useState<string>('all');
   const [searchQuery, setSearchQuery] = useState('');
+  const [debouncedSearch, setDebouncedSearch] = useState('');
+  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [cart, setCart] = useState<CartItem[]>([]);
   const [wishlist, setWishlist] = useState<number[]>([]);
   const [loading, setLoading] = useState(true);
@@ -51,6 +53,21 @@ export default function ProductsPage() {
   const [checkoutChecking, setCheckoutChecking] = useState(false);
   const [insufficientStockItems, setInsufficientStockItems] = useState<number[]>([]);
   const [checkoutWarning, setCheckoutWarning] = useState<string | null>(null);
+
+  // Debounce handler: update debouncedSearch 300ms after user stops typing
+  const handleSearchChange = useCallback((value: string) => {
+    setSearchQuery(value);
+    if (debounceRef.current) clearTimeout(debounceRef.current);
+    debounceRef.current = setTimeout(() => {
+      setDebouncedSearch(value);
+    }, 300);
+  }, []);
+
+  const clearSearch = useCallback(() => {
+    setSearchQuery('');
+    setDebouncedSearch('');
+    if (debounceRef.current) clearTimeout(debounceRef.current);
+  }, []);
 
   const requireLogin = (message: string) => {
     if (!session) {
@@ -298,8 +315,10 @@ export default function ProductsPage() {
 
   const filteredProducts = products.filter((product) => {
     const matchesCategory = activeCategory === 'all' || product.category_slug === activeCategory;
-    const matchesSearch = product.name.toLowerCase().includes(searchQuery.toLowerCase()) || 
-                         (product.description && product.description.toLowerCase().includes(searchQuery.toLowerCase()));
+    const q = debouncedSearch.toLowerCase().trim();
+    const matchesSearch = !q ||
+      product.name.toLowerCase().includes(q) ||
+      (product.description && product.description.toLowerCase().includes(q));
     return matchesCategory && matchesSearch;
   });
 
@@ -353,14 +372,43 @@ export default function ProductsPage() {
               ))}
             </div>
 
-            <div className="w-full md:w-64 relative">
+            {/* Enhanced Search Bar */}
+            <div className="w-full md:w-72 relative">
+              <label htmlFor="menu-search" className="sr-only">
+                Cari menu minuman atau makanan
+              </label>
+              {/* Search Icon */}
+              <span
+                aria-hidden="true"
+                className="absolute left-3 top-1/2 -translate-y-1/2 text-white/40 text-base pointer-events-none select-none"
+              >
+                🔍
+              </span>
               <input
-                type="text"
-                placeholder="Search products..."
+                id="menu-search"
+                type="search"
+                role="searchbox"
+                aria-label="Cari menu"
+                placeholder="Cari menu..."
                 value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                className="w-full px-4 py-2 bg-white/5 text-white rounded-lg border border-white/10 focus:border-emerald-500 outline-none"
+                onChange={(e) => handleSearchChange(e.target.value)}
+                onKeyDown={(e) => e.key === 'Escape' && clearSearch()}
+                autoComplete="off"
+                className="w-full pl-9 pr-9 py-2.5 bg-white/5 text-white rounded-lg border border-white/10 focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500/30 outline-none transition-all duration-200 placeholder:text-white/30 text-sm"
               />
+              {/* Clear Button */}
+              {searchQuery && (
+                <button
+                  type="button"
+                  aria-label="Hapus pencarian"
+                  onClick={clearSearch}
+                  className="absolute right-2.5 top-1/2 -translate-y-1/2 w-5 h-5 flex items-center justify-center text-white/40 hover:text-white transition-colors rounded-full hover:bg-white/10"
+                >
+                  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-4 h-4">
+                    <path d="M6.28 5.22a.75.75 0 0 0-1.06 1.06L8.94 10l-3.72 3.72a.75.75 0 1 0 1.06 1.06L10 11.06l3.72 3.72a.75.75 0 1 0 1.06-1.06L11.06 10l3.72-3.72a.75.75 0 0 0-1.06-1.06L10 8.94 6.28 5.22Z" />
+                  </svg>
+                </button>
+              )}
             </div>
           </div>
 
@@ -377,6 +425,31 @@ export default function ProductsPage() {
                   <p className="text-lg mb-2">No products found</p>
                   <p className="text-sm">Please setup the database or try different filters.</p>
                 </div>
+              ) : filteredProducts.length === 0 && debouncedSearch ? (
+                /* Empty state: no search results */
+                <motion.div
+                  key="no-results"
+                  initial={{ opacity: 0, y: 16 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0 }}
+                  className="flex flex-col items-center justify-center py-24 px-6 text-center"
+                  role="status"
+                  aria-live="polite"
+                >
+                  <div className="w-20 h-20 rounded-full bg-white/5 border border-white/10 flex items-center justify-center mb-6">
+                    <svg xmlns="http://www.w3.org/2000/svg" className="w-10 h-10 text-white/20" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="m21 21-5.197-5.197m0 0A7.5 7.5 0 1 0 5.196 15.803a7.5 7.5 0 0 0 10.607 0Z" />
+                    </svg>
+                  </div>
+                  <p className="text-white/70 font-semibold text-lg mb-1">Menu tidak ditemukan.</p>
+                  <p className="text-white/40 text-sm">Silakan coba kata kunci lain.</p>
+                  <button
+                    onClick={clearSearch}
+                    className="mt-6 px-5 py-2 text-sm font-bold bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 rounded-full hover:bg-emerald-500/20 transition-all"
+                  >
+                    Reset Pencarian
+                  </button>
+                </motion.div>
               ) : (
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
                   {filteredProducts.map((product) => (
